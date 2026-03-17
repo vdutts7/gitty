@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+[[ "$(git config core.hooksPath 2>/dev/null)" != ".hooks" ]] && git config --local include.path ../.gitconfig
+
+CLEARMETA="$ROOT/.hooks/scripts/clearmeta.sh"
+CHECK_COLLAB="$ROOT/.hooks/scripts/check-collaborator.sh"
+
+# 1: metadata strip
+if [[ -x "$CLEARMETA" ]]; then
+    staged=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
+    if [[ -n "$staged" ]]; then
+        while IFS= read -r f; do
+            [[ -f "$f" && "$f" != ".git/"* ]] && "$CLEARMETA" -q "$f" 2>/dev/null && git add "$f" 2>/dev/null || true
+        done <<< "$staged"
+        echo "[pre-commit] metadata stripped"
+    fi
+fi
+
+# 2: collaborator check
+USERNAME=$(git config user.name 2>/dev/null || echo "")
+[[ -z "$USERNAME" ]] && { echo "[pre-commit] git user.name not set"; exit 1; }
+
+if [[ -x "$CHECK_COLLAB" ]]; then
+    "$CHECK_COLLAB"; rc=$?
+    [[ $rc -eq 0 || $rc -eq 2 ]] && exit 0
+    echo ""
+    echo "COMMIT BLOCKED — not a repo collaborator"
+    echo "  user.name: $USERNAME"
+    echo "  remote:    $(git config --get remote.origin.url 2>/dev/null)"
+    echo "  fix: git config user.name '<your_username>'"
+    echo ""
+    exit 1
+fi
