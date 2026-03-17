@@ -1,0 +1,42 @@
+{
+  "repo": {
+    "name": "PROJECT_NAME",
+    "description": "One-liner description",
+    "homepage": "",
+    "topics": []
+  },
+  "owner": {
+    "username": "vdutts7",
+    "website": "https://vd7.io",
+    "twitter": "vdutts7"
+  },
+  "access_control": {
+    "_description": "Hooks auto-detect forge from remote URL (GitHub/GitLab/Codeberg/Gitea/Bitbucket). Only owner + collaborators can commit.",
+    "owner": "$REPO_OWNER",
+    "token": "$REPO_TOKEN"
+  },
+  "social_preview": {
+    "title": "PROJECT_NAME",
+    "icons_dir": "assets/icons",
+    "icon_creator": "https://vd7.dev/icon-creator",
+    "dimensions": {
+      "width": 1280,
+      "height": 640
+    }
+  },
+  "cloudinary": {
+    "_note": "Reads from env vars: CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET",
+    "cloud_name": "$CLOUDINARY_CLOUD_NAME",
+    "upload_preset": "$CLOUDINARY_UPLOAD_PRESET"
+  },
+  "workflows": {
+    "auto_share_to_main": true,
+    "main_account": "vdutts7"
+  },
+  "remote": {
+    "_description": "prefer: ssh|https|auto. origin_url: explicit URL. Run .hooks/scripts/set-remote.sh",
+    "_note": "Default ssh so repos created from this template use SSH; matches global url.git@github.com:.insteadOf https://github.com/",
+    "prefer": "ssh",
+    "origin_url": null
+  }
+}

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+[[ "$(git config core.hooksPath 2>/dev/null)" != ".hooks" ]] && git config --local include.path ../.gitconfig
+
+CHECK_COLLAB="$ROOT/.hooks/scripts/check-collaborator.sh"
+USERNAME=$(git config user.name 2>/dev/null || echo "")
+[[ -z "$USERNAME" ]] && exit 0
+
+if [[ -x "$CHECK_COLLAB" ]]; then
+    "$CHECK_COLLAB"; rc=$?
+    [[ $rc -eq 0 || $rc -eq 2 ]] && exit 0
+    echo ""
+    echo "warning: '$USERNAME' not a collaborator on $(git config --get remote.origin.url 2>/dev/null)"
+    echo "  fix: git config user.name '<your_username>'"
+    echo ""
+fi
