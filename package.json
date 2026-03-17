@@ -1,0 +1,28 @@
+{
+  "name": "@vd7/gitty",
+  "version": "0.1.0",
+  "description": "Git add, commit, and force push in one command. Prompts for message and root dir when omitted.",
+  "bin": {
+    "gitty": "bin/gitty.sh"
+  },
+  "scripts": {
+    "test": "bin/gitty.sh --help"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "push",
+    "cli",
+    "workflow"
+  ],
+  "author": "vdutts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vdutts7/gitty.git"
+  },
+  "homepage": "https://github.com/vdutts7/gitty#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
