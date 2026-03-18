@@ -1,7 +1,8 @@
 <div align="center">
 
 <h1 align="center">gitty</h1>
-<p align="center"><i><b>git add, commit, and push in one command- from  any dir, for any repo</b></i></p>
+<p align="center"><i><b>git add, commit, and push in one command</b></i></p>
+<p align="center"><i><b>from any dir, for any repo</b></i></p>
 
 [![GitHub][github-badge]][github-url]
 
@@ -82,6 +83,33 @@ gitty                                      # prompts for both
 
 - uses `git push -f`- overwrites remote
 - use when you want a **checkpoint**, not shared history
+
+### Demo (interactive)
+
+- make a tiny change
+- run **`gitty`** with no args- answer prompts
+- watch it stage, commit, and push
+
+```bash
+# make a change
+touch "$HOME/projects/example-repo/test.txt"
+```
+
+```bash
+# run (no args -> prompts)
+gitty
+Enter commit message [default: ..]: added XYZ feature
+Enter root directory (absolute path) [default: /Users/you/projects/example-repo]:
+
+# output (abbreviated)
+Detecting changed files..
+Staging changes...
+[main b309cba] added XYZ feature
+ create mode 100644 test.txt
+- Force pushing to remote...
+To github.com:vdutts7/example-repo.git
+🟢 Successfully added, committed, and pushed changes from /Users/you/projects/example-repo
+```
 
 <br/>
 

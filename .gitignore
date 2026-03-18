@@ -1,38 +1,52 @@
-node_modules/
+### core
 .DS_Store
-*.log
-npm-debug.log*
-# OS
 ._*
 Thumbs.db
-# Editors
+
+### editors
 .vscode/
 .idea/
 *.swp
 *~
-# Deps
+
+### node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+### python
 venv/
+.venv/
 __pycache__/
-# Build
+
+### build
 dist/
 build/
 *.o
 *.so
-# Env
+
+### env
 .env
 .env.*
 !.env.example
-# Logs
+
+### logs
 logs/
-# Cache
+
+### cache
 .cache/
 .parcel-cache/
 .next/
 .nuxt/
-# Coverage
+
+### coverage
 coverage/
 .nyc_output/
-# AI/Agentic
+
+### ai/agentic
 .cursor/*
 .claude/*
 .codeium/*
@@ -48,10 +62,15 @@ coverage/
 .amazonq/*
 .roo/*
 .cline*
-# Workflows
+
+### workflows
 _0
 _archive/
 _artifacts/
 _plans/
 *.timeline.json
 !.github/templates/timeline.template.json
+
+### npm pack artifacts
+*.tgz
+
