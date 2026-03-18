@@ -23,7 +23,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vdutts7/gitty.git"
+    "url": "git+https://github.com/vdutts7/gitty.git"
   },
   "homepage": "https://github.com/vdutts7/gitty#readme",
   "engines": {
