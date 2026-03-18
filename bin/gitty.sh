@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Git add, commit, and force push in one command.
+# One command: git add, commit, force push. Run from any directory
 # Part of @vd7/gitty - https://github.com/vdutts7/gitty
 
 setopt pipefail 2>/dev/null || true
@@ -28,7 +28,7 @@ show_help() {
   cat << EOF
 Usage: gitty [commit_mssg] [root_dir]
 
-Git add, commit, and force push in one command.
+One command: git add, commit, force push. Run from any directory — no need to cd into the repo; pass root_dir or get prompted.
 
 Arguments:
   commit_mssg  Commit message (prompts if not provided)

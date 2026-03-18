@@ -1,9 +1,10 @@
 {
+  "_description": "gitty: checkpoint any git repo from anywhere; one command. npm package @vd7/gitty.",
   "repo": {
-    "name": "PROJECT_NAME",
-    "description": "One-liner description",
-    "homepage": "",
-    "topics": []
+    "name": "gitty",
+    "description": "Checkpoint any git repo from anywhere- one command. Run from any dir; no cd. Agent-safe checkpoints.",
+    "homepage": "https://github.com/vdutts7/gitty",
+    "topics": ["git", "cli", "workflow", "checkpoint"]
   },
   "owner": {
     "username": "vdutts7",
@@ -16,7 +17,7 @@
     "token": "$REPO_TOKEN"
   },
   "social_preview": {
-    "title": "PROJECT_NAME",
+    "title": "gitty",
     "icons_dir": "assets/icons",
     "icon_creator": "https://vd7.dev/icon-creator",
     "dimensions": {
