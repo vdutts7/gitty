@@ -1,7 +1,7 @@
 {
   "name": "@vd7/gitty",
   "version": "0.1.1",
-  "description": "Git add, commit, and force push in one command. Prompts for message and root dir when omitted.",
+  "description": "git add, commit, and push in one command from any dir, for any repo- prompts for commit message + root dir when omitted",
   "bin": {
     "gitty": "bin/gitty.sh"
   },
