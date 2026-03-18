@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1 align="center">gitty</h1>
-<p align="center"><i><b>Git add, commit, and force push in one command. Prompts for message and repo root when omitted.</b></i></p>
+<p align="center"><i><b>git add, commit, and push in one command- from  any dir, for any repo</b></i></p>
 
 [![GitHub][github-badge]][github-url]
 
@@ -23,7 +23,32 @@
 
 ## About
 
-One-command workflow: stage all, commit with message, force push. Optional args; prompts for commit message and repo root when not provided.
+**Problem**
+
+- agents often edit **lots of repos** on my machine **at once**
+- I often bounce across multiple repos in a singular work session:
+    - adding little features here and there (mini-tasks for agent to do in background unattended)
+    - remembering todos, editing READMEs, other chores
+    - brilliant ideas
+    - tangents
+- want **frequent checkpoints** because agents go rogue and overwrite important stuff- devastating if you had a brilliant idea (or agent nukes something that isn't already protected by [shelllock](https://github.com/vdutts7/shelllock-macos))
+- need **several mini-rollbacks/snapshots**
+but `cd`-ing into each repo and running `git add` / `commit` / `push` over and over is **friction**
+
+**Solution**
+
+- **`gitty`** is one command: stage all → commit → **force-push**
+- run from **any directory** for **any repo**- pass **repo root** or get prompted
+    - no `cd` 
+    - no `&&` chaining
+- checkpoint **repo B** while in **repo A**
+    - drop a quick save before/after an agent run- always have a rollback
+
+**Summary**
+
+- one command: `git add`, `git commit -m <msg>`, `git push -f`
+- from any dir, for any repo (pass `path/to/repo/root` or get prompted)
+- built for **agent-heavy** workflows- **fast checkpoints across many repos**
 
 <br/>
 
@@ -43,16 +68,20 @@ gitty [commit_mssg] [root_dir]
 
 | Arg | Description |
 |-----|-------------|
-| `commit_mssg` | Commit message (prompted if omitted; default `..`) |
-| `root_dir` | Absolute path to git repo (prompted if omitted; default `$PWD`) |
+| `commit_mssg` | **Commit message** (prompted if omitted; default `..`) |
+| `root_dir` | **Repo root** to operate on (prompted if omitted; default `$PWD`)- checkpoint a repo without leaving your current dir |
 
 ### Examples
 
 ```bash
 gitty "fix bug" /path/to/repo
-gitty                    # prompts for both
-gitty "wip"              # message only; root = $PWD
+gitty "checkpoint" $HOME/projects/other-repo   # save other-repo while elsewhere
+gitty "wip"                                 # message only; root = $PWD
+gitty                                      # prompts for both
 ```
+
+- uses `git push -f`- overwrites remote
+- use when you want a **checkpoint**, not shared history
 
 <br/>
 

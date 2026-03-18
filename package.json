@@ -5,6 +5,7 @@
   "bin": {
     "gitty": "bin/gitty.sh"
   },
+  "files": ["bin", "README.md"],
   "scripts": {
     "test": "bin/gitty.sh --help"
   },
