@@ -1,11 +1,14 @@
 {
   "name": "@vd7/gitty",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Git add, commit, and force push in one command. Prompts for message and root dir when omitted.",
   "bin": {
     "gitty": "bin/gitty.sh"
   },
-  "files": ["bin", "README.md"],
+  "files": [
+    "bin",
+    "README.md"
+  ],
   "scripts": {
     "test": "bin/gitty.sh --help"
   },
