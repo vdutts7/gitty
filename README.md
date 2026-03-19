@@ -9,6 +9,7 @@
 <p align="center"><i><b>from any dir, for any repo</b></i></p>
 
 [![GitHub][github-badge]][github-url]
+[![npm][npm]][npm-url]
 
 </div>
 
@@ -131,3 +132,5 @@ To github.com:vdutts7/example-repo.git
 
 [github-badge]: https://img.shields.io/badge/gitty-000000?style=for-the-badge&logo=github&logoColor=white
 [github-url]: https://github.com/vdutts7/gitty
+[npm]: https://img.shields.io/badge/npm%20i%20--g%20glidercli-CB3837?style=for-the-badge&logo=npm
+[npm-url]: https://www.npmjs.com/package/@vd7/gitty
