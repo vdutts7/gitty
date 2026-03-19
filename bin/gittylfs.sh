@@ -5,13 +5,6 @@
 setopt pipefail 2>/dev/null || true
 set -eo pipefail
 
-# ---------- Load environment (optional; for local dev / scripts/.env) ----------
-ENV_FILE="${GITTY_ENV:-$HOME/scripts/.env}"
-if [[ -f "$ENV_FILE" ]]; then
-  # shellcheck source=/dev/null
-  source "$ENV_FILE"
-fi
-
 # ---------- Cleanup handler ----------
 cleanup() {
   local exit_code=$?
