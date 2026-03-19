@@ -1,6 +1,6 @@
 {
   "name": "@vd7/gitty",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "git add, commit, and push in one command from any dir, for any repo — with LFS, submodule, and health-check support",
   "bin": {
     "gitty": "bin/gitty.sh",
