@@ -21,7 +21,6 @@
     <a href="#about">About</a><br/>
     <a href="#install">Install</a><br/>
     <a href="#usage">Usage</a><br/>
-    <a href="#requirements">Requirements</a><br/>
     <a href="#contact">Contact</a>
 </ol>
 
@@ -91,7 +90,7 @@ gitty                                      # prompts for both
 
 ### Demo
 
-- make a tiny change
+- make a change
 - run **`gitty`** with no args- answer prompts
 - watch it stage, commit, and push
 
@@ -116,12 +115,6 @@ To github.com:vdutts7/example-repo.git
 🟢 Successfully added, committed, and pushed changes from /Users/you/projects/example-repo
 ```
 
-<br/>
-
-## Requirements
-
-- **zsh**
-- **git**
 
 <br/>
 
@@ -132,5 +125,5 @@ To github.com:vdutts7/example-repo.git
 
 [github-badge]: https://img.shields.io/badge/gitty-000000?style=for-the-badge&logo=github&logoColor=white
 [github-url]: https://github.com/vdutts7/gitty
-[npm]: https://img.shields.io/badge/npm%20i%20--g%20glidercli-CB3837?style=for-the-badge&logo=npm
+[npm]: https://img.shields.io/badge/npm-@vd7/gitty-CB3837?style=for-the-badge&logo=npm
 [npm-url]: https://www.npmjs.com/package/@vd7/gitty
