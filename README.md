@@ -87,6 +87,9 @@ gitty                                      # prompts for both
 
 - uses `git push -f`- overwrites remote
 - use when you want a **checkpoint**, not shared history
+- runs normal `git` commands- **does not bypass hooks**
+- repo **pre-commit**/**commit-msg**/**pre-push** gates still fire
+- if a repo enforces security hooks, **`gitty`** is subject to them
 
 ### Demo
 
