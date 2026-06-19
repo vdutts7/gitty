@@ -5,7 +5,7 @@
 <div align="center">
 
 <h1 align="center">gitty</h1>
-<p align="center"><i><b>git add, commit, force push- one command</b></i></p>
+<p align="center"><i><b>git add, commit, force push — one command</b></i></p>
 <p align="center"><i><b>any dir, any repo</b></i></p>
 
 [![GitHub][github-badge]][github-url]
@@ -22,8 +22,9 @@
     <a href="#install">Install</a><br/>
     <a href="#commands">Commands</a><br/>
     <a href="#usage">Usage</a><br/>
+    <a href="#partial-commit">Partial commit</a><br/>
     <a href="#behavior">Behavior</a><br/>
-    <a href="#hooks">Hooks</a><br/>
+    <a href="#docs">Docs</a><br/>
     <a href="#demo">Demo</a><br/>
     <a href="#contact">Contact</a>
 </ol>
@@ -34,26 +35,22 @@
 
 ### Problem
 
-1. agents touch many repos per session- mini tasks, README chores, tangents, ideas
-2. need fast checkpoints before/after agent runs- rollback when something gets nuked
+1. Agents touch many repos per session — mini tasks, README chores, tangents, ideas
+2. Need fast checkpoints before/after agent runs — rollback when something gets nuked
 3. `cd` + `git add` + `commit` + `push` per repo = friction
-4. offline push fail -> retry on clean tree -> remote never got last commit
+4. One bad file (too large, submodule) blocks the whole checkpoint
 
 ### Solution
 
-1. `gitty`: stage all -> commit -> always `git push -f`
-2. any cwd- pass repo root or get prompted
-3. checkpoint repo B while sitting in repo A
-4. logmoji: 🟡 in progress, 🟢 success, 🔴 failure
-5. hook pass/fail dashboard per step
-6. clean tree -> still force pushes
-7. remote up to date -> says so explicitly
+1. `gitty`: stage → commit → always `git push -f`
+2. **Partial mode**: hold back offenders; push everything else
+3. Any cwd — pass repo root or get prompted
+4. Logmoji: 🟡 in progress, 🟢 success, 🔴 failure
+5. Hook pass/fail dashboard when repo has `.hooks/`
 
 ### Summary
 
-1. one chain: `git add .` -> `git commit -m <msg>` -> `git push -f`
-2. agent-heavy multi-repo checkpointing
-3. npm tarball = `bin/` + README only- no hooks bundled
+One chain: `git add -A` → hold back blockers → `git commit` → `git push -f`. Agent-heavy multi-repo checkpointing. npm tarball = `bin/` + README only.
 
 <br/>
 
@@ -69,10 +66,12 @@ npm i -g @vd7/gitty
 
 | Bin | Purpose |
 |-----|---------|
-| `gitty` | add, commit, force push |
-| `gittylfs` | same + LFS-aware staging |
-| `gittyembedded` | same + recurse into submodules first |
-| `gittyhealth` | pre-push health check only |
+| `gitty` | add, partial holdback, commit, force push |
+| `gittylfs` | same + LFS track/install |
+| `gittyembedded` | recurse submodules, then parent |
+| `gittyhealth` | repo health report only |
+
+Details: [docs/commands.md](docs/commands.md)
 
 <br/>
 
@@ -84,10 +83,8 @@ gitty [commit_mssg] [root_dir]
 
 | Arg | Description |
 |-----|-------------|
-| `commit_mssg` | commit message- prompted if omitted; default `..` |
-| `root_dir` | absolute repo root- prompted if omitted; default `$PWD` |
-
-### Examples
+| `commit_mssg` | Commit message — prompted if omitted; default `..` |
+| `root_dir` | Absolute repo root — prompted if omitted; default `$PWD` |
 
 ```bash
 gitty "fix bug" /path/to/repo
@@ -98,78 +95,57 @@ gitty                # prompts for both
 
 <br/>
 
+## Partial commit
+
+When some paths cannot be pushed (oversized file, submodule pointer, remote rejection), `gitty` **holds them back locally** and commits/pushes the rest.
+
+```text
+🟡 - Held back: assets/huge.bin (exceeds push size limit)
+🟡 - 1 path(s) held back locally; proceeding with the rest
+...
+🟢 - Committed and force pushed (1 path(s) held back)
+```
+
+- Default on (`GITTY_PARTIAL=1`)
+- Submodules → use `gittyembedded`
+- Large binaries → use `gittylfs` or fix paths manually
+
+Full reference: [docs/partial-commit.md](docs/partial-commit.md)
+
+<br/>
+
 ## Behavior
 
 ### Force push
 
-1. always `git push -f`
-2. checkpoint workflow- overwrites remote branch
-3. use when you own remote and want snapshots
+Always `git push -f`. Checkpoint workflow — overwrites remote branch. Use when you own the remote.
 
-### Clean tree / retry
+### Clean tree
 
-1. nothing to commit -> `🟢 - Nothing to commit (working tree clean)`
-2. still force pushes after that
-3. remote already synced -> `🟢 - Nothing to push (remote up-to-date)`
-4. both -> `🟢 - Nothing to commit or push - remote synced`
+Nothing to commit → still force-pushes pending commits. Remote up to date → says so explicitly.
 
-### Status output
+### Env
 
-```text
-🟡 - Staging all changes in /path/to/repo...
-🟡 - Committing changes...
-🟢 - Nothing to commit (working tree clean)
-── hooks: pre-commit ──
-🟢 - skipped (nothing to commit)
-🟡 - Force pushing to remote...
-🟢 - Nothing to push (remote up-to-date)
-── hooks: pre-push ──
-🟢 - shelllock - passed
-🟢 - health-check - passed
-🟢 - Nothing to commit or push - remote synced
-```
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `GITTY_PARTIAL` | `1` | `0` disables holdback |
+| `GITTY_MAX_FILE_BYTES` | 100 MiB | Pre-commit size gate |
+| `README_CACHE_BUST` | — | `1` bumps README img `?v=` |
 
-1. hook dashboard lists each gate 🟢/🔴 when hooks run
-2. hook blocks -> 🔴 names which hook failed
-3. commit/push stops on hook fail
-
-### Optional env
-
-1. `GITTY_ENV` or `$HOME/scripts/.env` loaded if present
-2. no-op for most users
-3. repo `scripts/pre-gitty.sh` runs before `git add` if executable
-
-### README cache bust (GitHub UI)
-
-1. before `git add`, bumps `?v=` on every README `<img src>` when README changed vs HEAD
-2. `README_CACHE_BUST=1` force-bumps all imgs (stale GitHub render / push-only)
-3. bundled: `bin/readme-cache-bust.sh` (+ `.py`); falls back to `$CURTOOLS/git/` if present
-4. push-only stale UI: `README_CACHE_BUST=1 gitty ".." /path/to/repo`
-
-```bash
-README_CACHE_BUST=1 gitty "README: cache-bust" /path/to/repo
-```
+More: [docs/environment.md](docs/environment.md) · Hooks: [docs/hooks.md](docs/hooks.md)
 
 <br/>
 
-## Hooks
+## Docs
 
-### Npm install only
-
-1. plain `git` commands- no hooks ship in package
-2. no shelllock
-3. no health-check unless you add them
-
-### Repo with `.hooks/`
-
-1. e.g. [gh-template](https://github.com/vdutts7/gh-template)
-2. `gitty` does not bypass hooks- no `--no-verify`
-3. pre-commit on commit
-4. pre-push on push
-5. [shelllock](https://github.com/vdutts7/shelllock-macos) opt-in only
-6. needs `shelllock` on PATH
-7. needs repo pre-push hook wired
-8. not default for npm-only users
+| Doc | Topic |
+|-----|-------|
+| [docs/README.md](docs/README.md) | Index |
+| [docs/partial-commit.md](docs/partial-commit.md) | Holdback logic |
+| [docs/commands.md](docs/commands.md) | All bins |
+| [docs/environment.md](docs/environment.md) | Env vars |
+| [docs/hooks.md](docs/hooks.md) | Repo hooks |
+| [docs/publishing.md](docs/publishing.md) | npm release |
 
 <br/>
 
@@ -181,19 +157,10 @@ gitty "added test" "$HOME/projects/example-repo"
 ```
 
 ```text
-🟡 - Staging all changes in /Users/you/projects/example-repo...
+🟡 - Staging changes in /Users/you/projects/example-repo...
 🟡 - Committing changes...
 [main abc1234] added test
- 1 file changed, 0 insertions(+), 0 deletions(-)
- create mode 100644 test.txt
-── hooks: pre-commit ──
-🟢 - clearmeta - passed
-🟢 - check-collaborator - passed
 🟡 - Force pushing to remote...
-To github.com:you/example-repo.git
-   def5678..abc1234  main -> main
-── hooks: pre-push ──
-🟢 - health-check - all checks passed
 🟢 - Successfully committed and force pushed from /Users/you/projects/example-repo
 ```
 

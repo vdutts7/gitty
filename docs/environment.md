@@ -1,0 +1,39 @@
+# Environment variables
+
+Loaded at startup from `GITTY_ENV` if set, else `$HOME/scripts/.env` when that file exists.
+
+## gitty
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `GITTY_PARTIAL` | `1` | `0` = disable partial holdback (all-or-nothing) |
+| `GITTY_MAX_FILE_BYTES` | `104857600` (100 MiB) | Pre-commit size threshold for holdback |
+| `GITTY_PUSH_RETRIES` | `8` | Max push→holdback→recommit cycles |
+| `README_CACHE_BUST` | unset | `1` = force-bump `?v=` on all README `<img src>` |
+| `GITTY_ENV` | `$HOME/scripts/.env` | Alternate env file path |
+
+## Repo extension
+
+| Path | When |
+|------|------|
+| `scripts/pre-gitty.sh` | Runs before staging if executable |
+
+## README cache bust
+
+Before `git add`, bumps cache-bust query param on README images when README differs from HEAD.
+
+```bash
+README_CACHE_BUST=1 gitty "README: cache-bust" /path/to/repo
+```
+
+Bundled: `bin/readme-cache-bust.sh` (+ `.py`). Falls back to `$CURTOOLS/git/readme-cache-bust.sh` when present on the machine.
+
+## Partial commit examples
+
+```bash
+# Stricter size gate (50 MiB)
+GITTY_MAX_FILE_BYTES=$((50 * 1024 * 1024)) gitty "assets" /path/to/repo
+
+# Legacy: fail whole run if anything would be held back
+GITTY_PARTIAL=0 gitty "all or nothing" /path/to/repo
+```

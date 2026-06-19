@@ -22,6 +22,62 @@ cleanup() {
 }
 trap cleanup EXIT SIGTERM SIGINT SIGHUP
 
+# ---------- Partial commit/push: hold back offenders, proceed with the rest ----------
+gitty_holdback_offenders() {
+  [[ "${GITTY_PARTIAL:-1}" == 0 ]] && return 0
+
+  local -a held=()
+  local path mode size max_bytes reason
+
+  max_bytes=${GITTY_MAX_FILE_BYTES:-$((100 * 1024 * 1024))}
+
+  while IFS= read -r -d '' path; do
+    [[ -z "$path" ]] && continue
+    reason=""
+
+    mode=$(git ls-files -s -- "$path" 2>/dev/null | awk '{print $1}')
+    if [[ "$mode" == "160000" ]]; then
+      reason="submodule (use gittyembedded)"
+    elif [[ -f "$path" ]]; then
+      size=$(wc -c < "$path" 2>/dev/null | tr -d '[:space:]')
+      if [[ -n "$size" && "$size" -gt "$max_bytes" ]]; then
+        reason="exceeds push size limit (${size} bytes)"
+      fi
+    fi
+
+    if [[ -n "$reason" ]]; then
+      git reset HEAD -- "$path" 2>/dev/null || true
+      held+=("$path")
+      echo "🟡 - Held back: $path ($reason)"
+    fi
+  done < <(git diff --cached -z --name-only 2>/dev/null || true)
+
+  if [[ ${#held[@]} -gt 0 ]]; then
+    gitty_held_paths=("${held[@]}")
+    echo "🟡 - ${#held[@]} path(s) held back locally; proceeding with the rest"
+  fi
+}
+
+gitty_parse_push_offender() {
+  local output="$1"
+  local path
+
+  path=$(printf '%s\n' "$output" | grep -oiE 'File [^[:space:]]+ is [0-9.]+ MB' | head -1 | awk '{print $2}')
+  [[ -n "$path" ]] && { echo "$path"; return 0 }
+
+  path=$(printf '%s\n' "$output" | grep -oiE 'remote: error: File [^[:space:]]+ is' | head -1 | awk '{print $4}')
+  [[ -n "$path" ]] && { echo "$path"; return 0 }
+
+  return 1
+}
+
+gitty_holdback_path() {
+  local path="$1" reason="$2"
+  git reset HEAD -- "$path" 2>/dev/null || true
+  gitty_held_paths+=("$path")
+  echo "🟡 - Held back: $path ($reason)"
+}
+
 # ---------- Hook dashboard (logmoji) ----------
 gitty_report_hooks() {
   local event="$1"
@@ -39,10 +95,8 @@ gitty_report_hooks() {
       echo "🟢 - enforce-git-identity — passed"
     fi
 
-    if echo "$output" | grep -q 'BLOCKED - staged changes add em dashes'; then
-      echo "🔴 - check-em-dashes — em dashes in staged diff"
-    elif echo "$output" | grep -q 'em-dash check skipped'; then
-      echo "🟢 - check-em-dashes — skipped (EM_DASH_APPROVE)"
+    if echo "$output" | grep -q 'em dashes replaced with hyphens'; then
+      echo "🟢 - check-em-dashes — fixed (em dash -> hyphen)"
     elif [[ "$hook_rc" -eq 0 ]]; then
       echo "🟢 - check-em-dashes — passed"
     fi
@@ -159,6 +213,7 @@ esac
 }
 
 original_dir="$PWD"
+typeset -a gitty_held_paths=()
 
 cd "$root_dir" || {
   echo "🔴 - Failed to change to directory: $root_dir" >&2
@@ -184,12 +239,21 @@ gitty_bust_readme() {
 
 gitty_bust_readme
 
-echo "🟡 - Staging all changes in $root_dir..."
-git add . || {
+echo "🟡 - Staging changes in $root_dir..."
+git add -A || {
   echo "🔴 - Failed to stage changes" >&2
   cd "$original_dir"
   exit 1
 }
+gitty_holdback_offenders
+
+if ! git diff --cached --quiet 2>/dev/null; then
+  :
+elif [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
+  echo "🟡 - Nothing committable after holdback; held back ${#gitty_held_paths[@]} path(s)"
+else
+  echo "🟡 - No staged changes"
+fi
 
 committed=false
 nothing_to_commit=false
@@ -238,39 +302,93 @@ else
 fi
 
 push_up_to_date=false
+push_attempt=0
+push_max=${GITTY_PUSH_RETRIES:-8}
 
 echo "🟡 - Force pushing to remote..."
-unsetopt errexit
-push_output=$(git push -f 2>&1)
-push_status=$?
-setopt errexit
+while true; do
+  unsetopt errexit
+  if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+    push_output=$(git push -f 2>&1)
+  else
+    push_output=$(git push -f -u origin HEAD 2>&1)
+  fi
+  push_status=$?
+  setopt errexit
 
-if [[ $push_status -eq 0 ]]; then
-  if echo "$push_output" | grep -qiE 'everything up-to-date|up to date'; then
-    push_up_to_date=true
-    echo "🟢 - Nothing to push (remote up-to-date)"
-  else
-    echo "$push_output"
+  if [[ $push_status -eq 0 ]]; then
+    if echo "$push_output" | grep -qiE 'everything up-to-date|up to date'; then
+      push_up_to_date=true
+      echo "🟢 - Nothing to push (remote up-to-date)"
+    else
+      echo "$push_output"
+    fi
+    gitty_report_hooks pre-push "$push_output" 0
+    break
   fi
-  gitty_report_hooks pre-push "$push_output" 0
-else
-  if echo "$push_output" | grep -qiE 'hook declined|BLOCKED|failed'; then
-    echo "🔴 - Push blocked by hook" >&2
-    gitty_report_hooks pre-push "$push_output" 1
-  else
-    echo "🔴 - Failed to push changes" >&2
+
+  offender=""
+  offender=$(gitty_parse_push_offender "$push_output" 2>/dev/null || true)
+  if [[ -z "$offender" || $push_attempt -ge $push_max ]]; then
+    if echo "$push_output" | grep -qiE 'hook declined|BLOCKED|failed'; then
+      echo "🔴 - Push blocked by hook" >&2
+      gitty_report_hooks pre-push "$push_output" 1
+    else
+      echo "🔴 - Failed to push changes" >&2
+    fi
+    echo "$push_output" >&2
+    cd "$original_dir"
+    exit 1
   fi
-  echo "$push_output" >&2
-  cd "$original_dir"
-  exit 1
-fi
+
+  echo "🟡 - Push rejected $offender; holding back and retrying..."
+  if [[ "$committed" == true ]]; then
+    unsetopt errexit
+    git reset --soft HEAD~1 2>/dev/null
+    setopt errexit
+    committed=false
+  fi
+  gitty_holdback_path "$offender" "push rejected"
+  gitty_holdback_offenders
+
+  if git diff --cached --quiet 2>/dev/null; then
+    echo "🔴 - Nothing left to push after holdback" >&2
+    echo "$push_output" >&2
+    cd "$original_dir"
+    exit 1
+  fi
+
+  echo "🟡 - Recommitting without held-back paths..."
+  unsetopt errexit
+  commit_output=$(git commit -m "$commit_mssg" 2>&1)
+  commit_status=$?
+  setopt errexit
+  if [[ $commit_status -ne 0 ]]; then
+    echo "🔴 - Failed to recommit after holdback" >&2
+    echo "$commit_output" >&2
+    cd "$original_dir"
+    exit 1
+  fi
+  committed=true
+  echo "$commit_output"
+  ((push_attempt++))
+done
 
 cd "$original_dir"
 
 if [[ "$nothing_to_commit" == true && "$push_up_to_date" == true ]]; then
-  echo "🟢 - Nothing to commit or push — remote synced"
+  if [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
+    echo "🟢 - Remote synced; ${#gitty_held_paths[@]} path(s) held back locally"
+  else
+    echo "🟢 - Nothing to commit or push — remote synced"
+  fi
 elif [[ "$committed" == true ]]; then
-  echo "🟢 - Successfully committed and force pushed from $root_dir"
+  if [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
+    echo "🟢 - Committed and force pushed from $root_dir (${#gitty_held_paths[@]} path(s) held back)"
+    printf '   %s\n' "${gitty_held_paths[@]}"
+  else
+    echo "🟢 - Successfully committed and force pushed from $root_dir"
+  fi
 elif [[ "$nothing_to_commit" == true ]]; then
   echo "🟢 - Force pushed pending commits from $root_dir"
 else

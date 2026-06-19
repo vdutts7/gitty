@@ -1,7 +1,7 @@
 {
   "name": "@vd7/gitty",
   "version": "0.3.6",
-  "description": "git add, commit, and push in one command from any dir, for any repo — with LFS, submodule, and health-check support",
+  "description": "git add, commit, and force push in one command — partial holdback for oversized/submodule paths, plus LFS, submodule, and health-check variants",
   "bin": {
     "gitty": "bin/gitty.sh",
     "gittylfs": "bin/gittylfs.sh",
