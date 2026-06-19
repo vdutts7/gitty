@@ -1,6 +1,6 @@
 {
   "name": "@vd7/gitty",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "git add, commit, and force push in one command — partial holdback for oversized/submodule paths, plus LFS, submodule, and health-check variants",
   "bin": {
     "gitty": "bin/gitty.sh",
