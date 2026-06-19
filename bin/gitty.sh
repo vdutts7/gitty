@@ -59,6 +59,12 @@ gitty_report_hooks() {
       echo "🟢 - clearmeta — passed"
     fi
 
+    if echo "$output" | grep -q '\[readme-cache-bust\] bumped'; then
+      echo "🟢 - readme-cache-bust — img v= bumped"
+    elif echo "$output" | grep -q '\[readme-cache-bust\] skip'; then
+      echo "🟢 - readme-cache-bust — skipped"
+    fi
+
     if [[ "$hook_rc" -eq 0 ]]; then
       echo "🟢 - drop-eof-newline-only — passed"
     fi
@@ -163,6 +169,21 @@ if [[ -x "$root_dir/scripts/pre-gitty.sh" ]]; then
   "$root_dir/scripts/pre-gitty.sh"
 fi
 
+gitty_bust_readme() {
+  local bust="${0:A:h}/readme-cache-bust.sh"
+  [[ -x "$bust" ]] || bust="${CURTOOLS:-$HOME/.cursor/tools}/git/readme-cache-bust.sh"
+  [[ -x "$bust" && -f "$root_dir/README.md" ]] || return 0
+  local -a bust_args=(--repo "$root_dir")
+  if [[ "${README_CACHE_BUST:-}" == 1 ]]; then
+    bust_args+=(--force)
+  else
+    bust_args+=(--if-dirty)
+  fi
+  "$bust" "${bust_args[@]}" 2>&1 || true
+}
+
+gitty_bust_readme
+
 echo "🟡 - Staging all changes in $root_dir..."
 git add . || {
   echo "🔴 - Failed to stage changes" >&2
@@ -185,9 +206,25 @@ if [[ $commit_status -eq 0 ]]; then
   gitty_report_hooks pre-commit "$commit_output" 0
 elif echo "$commit_output" | grep -qiE 'nothing to commit|no changes added to commit'; then
   nothing_to_commit=true
-  echo "🟢 - Nothing to commit (working tree clean)"
-  echo "── hooks: pre-commit ──"
-  echo "🟢 - skipped (nothing to commit)"
+  if [[ "${README_CACHE_BUST:-}" == 1 && -f "$root_dir/README.md" ]]; then
+    echo "🟡 - README_CACHE_BUST=1: force-bump img v= on push-only path..."
+    gitty_bust_readme
+    git add README.md 2>/dev/null || true
+    unsetopt errexit
+    commit_output=$(git commit -m "README: cache-bust image URLs" 2>&1)
+    commit_status=$?
+    setopt errexit
+    if [[ $commit_status -eq 0 ]]; then
+      committed=true
+      nothing_to_commit=false
+      echo "$commit_output"
+    fi
+  fi
+  if [[ "$nothing_to_commit" == true ]]; then
+    echo "🟢 - Nothing to commit (working tree clean)"
+    echo "── hooks: pre-commit ──"
+    echo "🟢 - skipped (nothing to commit)"
+  fi
 else
   if echo "$commit_output" | grep -qiE 'hook declined|BLOCKED|failed'; then
     echo "🔴 - Commit blocked by hook" >&2

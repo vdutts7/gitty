@@ -139,6 +139,17 @@ gitty                # prompts for both
 2. no-op for most users
 3. repo `scripts/pre-gitty.sh` runs before `git add` if executable
 
+### README cache bust (GitHub UI)
+
+1. before `git add`, bumps `?v=` on every README `<img src>` when README changed vs HEAD
+2. `README_CACHE_BUST=1` force-bumps all imgs (stale GitHub render / push-only)
+3. bundled: `bin/readme-cache-bust.sh` (+ `.py`); falls back to `$CURTOOLS/git/` if present
+4. push-only stale UI: `README_CACHE_BUST=1 gitty ".." /path/to/repo`
+
+```bash
+README_CACHE_BUST=1 gitty "README: cache-bust" /path/to/repo
+```
+
 <br/>
 
 ## Hooks
