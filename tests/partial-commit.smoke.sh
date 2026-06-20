@@ -44,6 +44,9 @@ cd "$FIXTURE" || exit 1
 "$PYTHON3" -c "open('huge.bin','wb').write(b'x'*500)"
 print -r -- "ok" > ok.txt
 print -r -- "fine" > fine.txt
+mkdir -p "projects/🔥-smoke_test"
+print -r -- "unicode ok" > "projects/🔥-smoke_test/instructions.md"
+typeset -r UNICODE_PATH="projects/🔥-smoke_test/instructions.md"
 
 typeset -a out=()
 out=("${(@f)$(
@@ -56,9 +59,12 @@ joined="${(j:\n:)out}"
 print -r -- "$joined" | grep -q '🔴 - huge\.bin — held back' && _pass "holdback line" || _fail "holdback line" "missing"
 print -r -- "$joined" | grep -q 'partial success' && _pass "partial dashboard" || _fail "partial dashboard" "missing"
 
-typeset -a committed=("${(@f)$("$GIT" show --name-only --pretty=format: HEAD 2>/dev/null)}")
-(( ${committed[(Ie)fine.txt]} && ${committed[(Ie)ok.txt]} )) \
-  && _pass "fine+ok committed" || _fail "fine+ok committed" "got: ${committed[*]}"
+typeset -a committed=("${(@f)$("$GIT" -c core.quotePath=false show --name-only --pretty=format: HEAD 2>/dev/null)}")
+typeset -i ok_committed=1
+for w in fine.txt ok.txt "$UNICODE_PATH"; do
+  (( ${committed[(Ie)$w]} )) || { ok_committed=0; break }
+done
+(( ok_committed )) && _pass "fine+ok+unicode committed" || _fail "fine+ok+unicode committed" "got: ${committed[*]}"
 print -r -- "${(j:\n:)committed}" | grep -q 'huge\.bin' \
   && _fail "huge.bin excluded" "was committed" || _pass "huge.bin excluded"
 

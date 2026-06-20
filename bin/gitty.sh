@@ -34,6 +34,17 @@ trap cleanup EXIT SIGTERM SIGINT SIGHUP
 typeset -a gitty_held_paths=()
 typeset -a gitty_held_reasons=()
 typeset -a _gitty_staged_snapshot=()
+typeset -a GITTY_GIT=(git -c core.quotePath=false)
+
+gitty_read_staged_paths() {
+  _gitty_staged_snapshot=()
+  local p
+  while IFS= read -r -d '' p; do
+    [[ -n "$p" ]] && _gitty_staged_snapshot+=("$p")
+  done < <("${GITTY_GIT[@]}" diff --cached --name-only -z 2>/dev/null || true)
+}
+
+gitty_refresh_staged_snapshot() { gitty_read_staged_paths; }
 
 gitty_record_held() {
   local path="$1" reason="$2"
@@ -85,7 +96,7 @@ gitty_holdback_offenders() {
     [[ -z "$path" ]] && continue
     reason=""
 
-    entry=$(git ls-files -s -- "$path" 2>/dev/null || true)
+    entry=$("${GITTY_GIT[@]}" ls-files -s -- "$path" 2>/dev/null || true)
     mode=${entry%% *}
     if [[ "$mode" == "160000" ]]; then
       reason="submodule (use gittyembedded)"
@@ -98,7 +109,7 @@ gitty_holdback_offenders() {
     fi
 
     if [[ -n "$reason" ]]; then
-      git reset HEAD -- "$path" 2>/dev/null || true
+      "${GITTY_GIT[@]}" reset HEAD -- "$path" 2>/dev/null || true
       held+=("$path")
       reasons+=("$reason")
     fi
@@ -130,36 +141,19 @@ gitty_parse_push_offender() {
 gitty_unstage_held_paths() {
   local p
   for p in "${gitty_held_paths[@]}"; do
-    git reset HEAD -- "$p" 2>/dev/null || true
+    "${GITTY_GIT[@]}" reset HEAD -- "$p" 2>/dev/null || true
   done
 }
 
 gitty_commit_safe() {
   local msg="$1"
   gitty_unstage_held_paths
-  gitty_refresh_staged_snapshot
-
-  local -a to_commit=()
-  local p h skip
-
-  for p in "${_gitty_staged_snapshot[@]}"; do
-    skip=false
-    for h in "${gitty_held_paths[@]}"; do
-      [[ "$p" == "$h" ]] && { skip=true; break; }
-    done
-    $skip || to_commit+=("$p")
-  done
-
-  if [[ ${#to_commit[@]} -eq 0 ]]; then
-    git commit -m "$msg" 2>&1
-  else
-    git commit -m "$msg" -- "${to_commit[@]}" 2>&1
-  fi
+  git commit -m "$msg" 2>&1
 }
 
 gitty_holdback_path() {
   local path="$1" reason="$2"
-  git reset HEAD -- "$path" 2>/dev/null || true
+  "${GITTY_GIT[@]}" reset HEAD -- "$path" 2>/dev/null || true
   gitty_record_held "$path" "$reason"
 }
 
@@ -173,7 +167,7 @@ gitty_report_partial() {
     while IFS= read -r p; do
       [[ -z "$p" ]] && continue
       committed_paths+=("$p")
-    done < <(git show --name-only --pretty=format: HEAD 2>/dev/null || true)
+    done < <("${GITTY_GIT[@]}" show --name-only --pretty=format: HEAD 2>/dev/null || true)
     pushed_count=${#committed_paths[@]}
   fi
 
@@ -381,12 +375,6 @@ gitty_bust_readme() {
 gitty_bust_readme
 
 echo "🟡 - Staging changes in $root_dir..."
-gitty_refresh_staged_snapshot() {
-  local staged_raw
-  staged_raw=$(git diff --cached --name-only 2>/dev/null || true)
-  _gitty_staged_snapshot=()
-  [[ -n "$staged_raw" ]] && _gitty_staged_snapshot=("${(@f)staged_raw}")
-}
 
 git add -A || {
   echo "🔴 - Failed to stage changes" >&2
