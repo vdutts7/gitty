@@ -4,6 +4,8 @@
 
 setopt errexit pipefail
 
+typeset -r _GITTY_ROOT="${0:A:h:h}"
+
 # Preserve CLI env overrides across optional GITTY_ENV source
 _gitty_partial_cli=${GITTY_PARTIAL-}
 _gitty_max_cli=${GITTY_MAX_FILE_BYTES-}
@@ -324,33 +326,65 @@ gitty_report_hooks() {
   fi
 }
 
-# ---------- Help ----------
+# ---------- Help / version ----------
+gitty_version() {
+  local pkg="${_GITTY_ROOT}/package.json"
+  local ver="unknown"
+  if [[ -f "$pkg" ]]; then
+    ver=$(grep -m1 '"version"' "$pkg" | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    [[ -z "$ver" ]] && ver="unknown"
+  fi
+  echo "gitty ${ver}"
+  exit 0
+}
+
+gitty_usage_error() {
+  echo "🔴 - $1" >&2
+  echo "usage: gitty [-h|--help] [-V|--version] [commit_mssg] [root_dir]" >&2
+  exit 1
+}
+
 show_help() {
   cat << EOF
-Usage: gitty [commit_mssg] [root_dir]
+Usage: gitty [-h|--help] [-V|--version] [commit_mssg] [root_dir]
 
 Git add, commit, and force push in one command.
 
+Options:
+  -h, --help      Show this help
+  -V, --version   Show version
+
 Arguments:
-  commit_mssg  Commit message (prompts if not provided)
-  root_dir     Absolute path to git repo (prompts if not provided, defaults to \$PWD)
+  commit_mssg  Commit message (prompts if omitted; default ..)
+  root_dir     Absolute repo root (prompts if omitted; default \$PWD)
 
 Examples:
   gitty "fix bug" /path/to/repo
-  gitty  # Will prompt for both parameters
+  gitty
 
 EOF
   exit 0
 }
 
-for arg in "$@"; do
-  case "$arg" in
+typeset -a gitty_positional=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     -h|--help) show_help ;;
+    -V|--version) gitty_version ;;
+    --)
+      shift
+      gitty_positional+=("$@")
+      break
+      ;;
+    -*) gitty_usage_error "unknown flag: $1" ;;
+    *) gitty_positional+=("$1"); shift ;;
   esac
 done
 
-commit_mssg="$1"
-root_dir="$2"
+(( ${#gitty_positional[@]} > 2 )) && gitty_usage_error "too many arguments"
+
+commit_mssg="${gitty_positional[1]:-}"
+root_dir="${gitty_positional[2]:-}"
 
 [[ -z "$commit_mssg" ]] && {
   echo -n "Enter commit message [default: ..]: "
