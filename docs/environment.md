@@ -26,7 +26,7 @@ Before `git add`, bumps cache-bust query param on README images when README diff
 README_CACHE_BUST=1 gitty "README: cache-bust" /path/to/repo
 ```
 
-Bundled: `bin/readme-cache-bust.sh` (+ `.py`). Falls back to `$CURTOOLS/git/readme-cache-bust.sh` when present on the machine.
+Bundled: `bin/readme-cache-bust.sh` (+ `.py`).
 
 ## Partial commit examples
 

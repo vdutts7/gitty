@@ -8,7 +8,6 @@ Reference for [@vd7/gitty](https://www.npmjs.com/package/@vd7/gitty).
 | [partial-commit.md](partial-commit.md) | Hold back offenders; commit and push the rest |
 | [environment.md](environment.md) | Env vars and repo hooks integration |
 | [hooks.md](hooks.md) | Repo `.hooks/` vs npm-only install |
-| [publishing.md](publishing.md) | Maintainer release via `npm-publish` |
 
 ## Quick start
 

@@ -4,12 +4,20 @@
 
 setopt errexit pipefail
 
+# Preserve CLI env overrides across optional GITTY_ENV source
+_gitty_partial_cli=${GITTY_PARTIAL-}
+_gitty_max_cli=${GITTY_MAX_FILE_BYTES-}
+
 # ---------- Load environment (optional; no-op if absent) ----------
 ENV_FILE="${GITTY_ENV:-$HOME/scripts/.env}"
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck source=/dev/null
   source "$ENV_FILE"
 fi
+
+[[ -n "$_gitty_partial_cli" ]] && GITTY_PARTIAL="$_gitty_partial_cli"
+[[ -n "$_gitty_max_cli" ]] && GITTY_MAX_FILE_BYTES="$_gitty_max_cli"
+GITTY_PARTIAL=${GITTY_PARTIAL:-1}
 
 # ---------- Cleanup handler ----------
 cleanup() {
@@ -23,24 +31,68 @@ cleanup() {
 trap cleanup EXIT SIGTERM SIGINT SIGHUP
 
 # ---------- Partial commit/push: hold back offenders, proceed with the rest ----------
+typeset -a gitty_held_paths=()
+typeset -a gitty_held_reasons=()
+typeset -a _gitty_staged_snapshot=()
+
+gitty_record_held() {
+  local path="$1" reason="$2"
+  local existing
+  for existing in "${gitty_held_paths[@]}"; do
+    [[ "$existing" == "$path" ]] && return 0
+  done
+  gitty_held_paths+=("$path")
+  gitty_held_reasons+=("$reason")
+  echo "🔴 - $path — held back ($reason)"
+}
+
+gitty_file_size() {
+  local file="$1"
+  local size=0
+  [[ -f "$file" ]] || { echo 0; return 0 }
+  if [[ -x /usr/bin/stat ]]; then
+    /usr/bin/stat -f%z "$file" 2>/dev/null && return 0
+    /usr/bin/stat -c%s "$file" 2>/dev/null && return 0
+  fi
+  if command -v stat >/dev/null 2>&1; then
+    stat -f%z "$file" 2>/dev/null && return 0
+    stat -c%s "$file" 2>/dev/null && return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import os, sys; print(os.path.getsize(sys.argv[1]))' "$file" 2>/dev/null && return 0
+  fi
+  echo 0
+}
+
 gitty_holdback_offenders() {
   [[ "${GITTY_PARTIAL:-1}" == 0 ]] && return 0
 
+  setopt localoptions
+  unsetopt errexit
+
   local -a held=()
-  local path mode size max_bytes reason
+  local -a reasons=()
+  local path mode size max_bytes reason entry
 
   max_bytes=${GITTY_MAX_FILE_BYTES:-$((100 * 1024 * 1024))}
 
-  while IFS= read -r -d '' path; do
+  [[ -n "${GITTY_DEBUG:-}" ]] && echo "🟡 - holdback scan (max=${max_bytes} bytes)" >&2
+
+  local -a staged_paths=("${_gitty_staged_snapshot[@]}")
+  [[ -n "${GITTY_DEBUG:-}" ]] && echo "🟡 - holdback staged: ${staged_paths[*]:-none}" >&2
+
+  for path in "${staged_paths[@]}"; do
     [[ -z "$path" ]] && continue
     reason=""
 
-    mode=$(git ls-files -s -- "$path" 2>/dev/null | awk '{print $1}')
+    entry=$(git ls-files -s -- "$path" 2>/dev/null || true)
+    mode=${entry%% *}
     if [[ "$mode" == "160000" ]]; then
       reason="submodule (use gittyembedded)"
     elif [[ -f "$path" ]]; then
-      size=$(wc -c < "$path" 2>/dev/null | tr -d '[:space:]')
-      if [[ -n "$size" && "$size" -gt "$max_bytes" ]]; then
+      size=$(gitty_file_size "$path")
+      [[ -n "${GITTY_DEBUG:-}" ]] && echo "🟡 - holdback check $path size=$size" >&2
+      if (( size > max_bytes )); then
         reason="exceeds push size limit (${size} bytes)"
       fi
     fi
@@ -48,13 +100,17 @@ gitty_holdback_offenders() {
     if [[ -n "$reason" ]]; then
       git reset HEAD -- "$path" 2>/dev/null || true
       held+=("$path")
-      echo "🟡 - Held back: $path ($reason)"
+      reasons+=("$reason")
     fi
-  done < <(git diff --cached -z --name-only 2>/dev/null || true)
+  done
 
   if [[ ${#held[@]} -gt 0 ]]; then
-    gitty_held_paths=("${held[@]}")
-    echo "🟡 - ${#held[@]} path(s) held back locally; proceeding with the rest"
+    local i
+    for i in {1..${#held[@]}}; do
+      gitty_record_held "${held[$i]}" "${reasons[$i]}"
+    done
+    echo "🟡 - ${#held[@]} path(s) held back; proceeding with the rest"
+    gitty_refresh_staged_snapshot
   fi
 }
 
@@ -71,11 +127,97 @@ gitty_parse_push_offender() {
   return 1
 }
 
+gitty_unstage_held_paths() {
+  local p
+  for p in "${gitty_held_paths[@]}"; do
+    git reset HEAD -- "$p" 2>/dev/null || true
+  done
+}
+
+gitty_commit_safe() {
+  local msg="$1"
+  gitty_unstage_held_paths
+  gitty_refresh_staged_snapshot
+
+  local -a to_commit=()
+  local p h skip
+
+  for p in "${_gitty_staged_snapshot[@]}"; do
+    skip=false
+    for h in "${gitty_held_paths[@]}"; do
+      [[ "$p" == "$h" ]] && { skip=true; break; }
+    done
+    $skip || to_commit+=("$p")
+  done
+
+  if [[ ${#to_commit[@]} -eq 0 ]]; then
+    git commit -m "$msg" 2>&1
+  else
+    git commit -m "$msg" -- "${to_commit[@]}" 2>&1
+  fi
+}
+
 gitty_holdback_path() {
   local path="$1" reason="$2"
   git reset HEAD -- "$path" 2>/dev/null || true
-  gitty_held_paths+=("$path")
-  echo "🟡 - Held back: $path ($reason)"
+  gitty_record_held "$path" "$reason"
+}
+
+gitty_report_partial() {
+  local -a committed_paths=()
+  local pushed_count=0
+  local held_count=${#gitty_held_paths[@]}
+  local i p
+
+  if [[ "$committed" == true ]]; then
+    while IFS= read -r p; do
+      [[ -z "$p" ]] && continue
+      committed_paths+=("$p")
+    done < <(git show --name-only --pretty=format: HEAD 2>/dev/null || true)
+    pushed_count=${#committed_paths[@]}
+  fi
+
+  echo "── partial: commit/push ──"
+
+  if [[ $pushed_count -gt 0 ]]; then
+    for p in "${committed_paths[@]}"; do
+      local is_held=false held_path
+      for held_path in "${gitty_held_paths[@]}"; do
+        [[ "$p" == "$held_path" ]] && is_held=true && break
+      done
+      [[ "$is_held" == true ]] && continue
+      echo "🟢 - $p — committed and pushed"
+    done
+  elif [[ "$committed" == true ]]; then
+    echo "🟢 - commit — committed and pushed"
+    pushed_count=1
+  elif [[ "$nothing_to_commit" == true && "$push_up_to_date" == true ]]; then
+    echo "🟢 - remote — already up to date"
+  elif [[ "$nothing_to_commit" == true ]]; then
+    echo "🟢 - push — pending commits force-pushed"
+  fi
+
+  if [[ $held_count -gt 0 ]]; then
+    for i in {1..$held_count}; do
+      echo "🔴 - ${gitty_held_paths[$i]} — not pushed (${gitty_held_reasons[$i]})"
+    done
+  fi
+
+  if [[ $held_count -eq 0 && $pushed_count -gt 0 ]]; then
+    echo "🟢 - all staged paths committed and pushed"
+  elif [[ $held_count -gt 0 && $pushed_count -gt 0 ]]; then
+    local pushed_ok=0 p is_held=false held_path
+    for p in "${committed_paths[@]}"; do
+      is_held=false
+      for held_path in "${gitty_held_paths[@]}"; do
+        [[ "$p" == "$held_path" ]] && is_held=true && break
+      done
+      [[ "$is_held" == false ]] && pushed_ok=$((pushed_ok + 1))
+    done
+    echo "🟢 - partial success — ${pushed_ok} pushed, ${held_count} held back"
+  elif [[ $held_count -gt 0 && $pushed_count -eq 0 && "$nothing_to_commit" != true ]]; then
+    echo "🔴 - nothing pushed — ${held_count} path(s) held back"
+  fi
 }
 
 # ---------- Hook dashboard (logmoji) ----------
@@ -213,7 +355,6 @@ esac
 }
 
 original_dir="$PWD"
-typeset -a gitty_held_paths=()
 
 cd "$root_dir" || {
   echo "🔴 - Failed to change to directory: $root_dir" >&2
@@ -240,11 +381,20 @@ gitty_bust_readme() {
 gitty_bust_readme
 
 echo "🟡 - Staging changes in $root_dir..."
+gitty_refresh_staged_snapshot() {
+  local staged_raw
+  staged_raw=$(git diff --cached --name-only 2>/dev/null || true)
+  _gitty_staged_snapshot=()
+  [[ -n "$staged_raw" ]] && _gitty_staged_snapshot=("${(@f)staged_raw}")
+}
+
 git add -A || {
   echo "🔴 - Failed to stage changes" >&2
   cd "$original_dir"
   exit 1
 }
+gitty_refresh_staged_snapshot
+[[ -n "${GITTY_DEBUG:-}" ]] && echo "🟡 - post-add staged: ${_gitty_staged_snapshot[*]:-none}" >&2
 gitty_holdback_offenders
 
 if ! git diff --cached --quiet 2>/dev/null; then
@@ -260,7 +410,7 @@ nothing_to_commit=false
 
 echo "🟡 - Committing changes..."
 unsetopt errexit
-commit_output=$(git commit -m "$commit_mssg" 2>&1)
+commit_output=$(gitty_commit_safe "$commit_mssg")
 commit_status=$?
 setopt errexit
 
@@ -360,7 +510,7 @@ while true; do
 
   echo "🟡 - Recommitting without held-back paths..."
   unsetopt errexit
-  commit_output=$(git commit -m "$commit_mssg" 2>&1)
+  commit_output=$(gitty_commit_safe "$commit_mssg")
   commit_status=$?
   setopt errexit
   if [[ $commit_status -ne 0 ]]; then
@@ -376,16 +526,17 @@ done
 
 cd "$original_dir"
 
+gitty_report_partial
+
 if [[ "$nothing_to_commit" == true && "$push_up_to_date" == true ]]; then
   if [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
-    echo "🟢 - Remote synced; ${#gitty_held_paths[@]} path(s) held back locally"
+    echo "🟢 - Remote synced (${#gitty_held_paths[@]} path(s) still held back locally)"
   else
     echo "🟢 - Nothing to commit or push — remote synced"
   fi
 elif [[ "$committed" == true ]]; then
   if [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
-    echo "🟢 - Committed and force pushed from $root_dir (${#gitty_held_paths[@]} path(s) held back)"
-    printf '   %s\n' "${gitty_held_paths[@]}"
+    echo "🟢 - Partial commit/push from $root_dir"
   else
     echo "🟢 - Successfully committed and force pushed from $root_dir"
   fi

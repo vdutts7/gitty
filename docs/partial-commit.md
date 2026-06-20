@@ -31,14 +31,16 @@ Four files modified; one is a 150 MiB blob and one is a submodule pointer:
 
 ```text
 🟡 - Staging changes in /path/to/repo...
-🟡 - Held back: assets/huge.bin (exceeds push size limit (157286400 bytes))
-🟡 - Held back: vendor/lib (submodule (use gittyembedded))
-🟡 - 2 path(s) held back locally; proceeding with the rest
+🔴 - huge.bin — held back (exceeds push size limit (500 bytes))
+🟡 - 1 path(s) held back; proceeding with the rest
 🟡 - Committing changes...
 🟡 - Force pushing to remote...
-🟢 - Committed and force pushed from /path/to/repo (2 path(s) held back)
-   assets/huge.bin
-   vendor/lib
+── partial: commit/push ──
+🟢 - ok.txt — committed and pushed
+🟢 - fine.txt — committed and pushed
+🔴 - huge.bin — not pushed (exceeds push size limit (500 bytes))
+🟢 - partial success — 2 pushed, 1 held back
+🟢 - Partial commit/push from /path/to/repo
 ```
 
 The other two files commit and push normally. Held-back paths stay in your working tree unstaged.
@@ -48,6 +50,19 @@ The other two files commit and push normally. Held-back paths stay in your worki
 If a file slips past pre-scan (or the host rejects it for another size-related reason), `gitty` parses the push error, holds that path back, soft-resets the last commit, recommits without it, and retries.
 
 Retries: `GITTY_PUSH_RETRIES` (default `8`).
+
+## Canonical test
+
+Operator SSOT: `$CURTOOLS/test/gitty-partial-commit.smoke.sh`  
+Downstream (this repo): `tests/partial-commit.smoke.sh`
+
+```bash
+npm run test:partial
+# or
+tests/partial-commit.smoke.sh
+```
+
+Expects: `huge.bin` held back (🔴), `ok.txt` + `fine.txt` pushed (🟢), partial success dashboard.
 
 ## Disable partial mode
 

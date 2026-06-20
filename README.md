@@ -145,7 +145,6 @@ More: [docs/environment.md](docs/environment.md) · Hooks: [docs/hooks.md](docs/
 | [docs/commands.md](docs/commands.md) | All bins |
 | [docs/environment.md](docs/environment.md) | Env vars |
 | [docs/hooks.md](docs/hooks.md) | Repo hooks |
-| [docs/publishing.md](docs/publishing.md) | npm release |
 
 <br/>
 
