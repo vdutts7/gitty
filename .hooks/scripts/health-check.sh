@@ -40,7 +40,7 @@ done < <(git status --porcelain 2>/dev/null)
 
 echo ""
 echo "=== STAGED ==="
-while IFS= read -r file; do
+while IFS= read -r -d '' file; do
     [[ -z "$file" ]] && continue
     if [[ -f "$file" ]]; then
         fsize=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "0")
@@ -50,11 +50,11 @@ while IFS= read -r file; do
             ISSUES=1
         fi
     fi
-done < <(git diff --cached --name-only 2>/dev/null)
+done < <(git -c core.quotePath=false diff --cached --name-only -z 2>/dev/null)
 
 echo ""
 echo "=== COMMITTED (last 10) ==="
-while IFS= read -r file; do
+while IFS= read -r -d '' file; do
     [[ -z "$file" ]] && continue
     if [[ -f "$file" ]]; then
         fsize=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "0")
@@ -64,7 +64,7 @@ while IFS= read -r file; do
             ISSUES=1
         fi
     fi
-done < <(git log --oneline -10 --diff-filter=A --name-only --pretty=format:"" 2>/dev/null | sort -u)
+done < <(git -c core.quotePath=false log -10 --diff-filter=A --name-only -z --pretty=format: 2>/dev/null)
 
 if [[ $ISSUES -eq 0 ]]; then
     echo "  🟢 No large files"

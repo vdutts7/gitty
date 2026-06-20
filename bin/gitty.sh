@@ -46,6 +46,43 @@ gitty_read_staged_paths() {
 
 gitty_refresh_staged_snapshot() { gitty_read_staged_paths; }
 
+gitty_path_canonical() {
+  local p="$1"
+  command -v python3 >/dev/null 2>&1 || { print -r -- "$p"; return 0 }
+  python3 -c 'import sys, unicodedata; print(unicodedata.normalize("NFKC", sys.argv[1]))' "$p"
+}
+
+gitty_path_from_display() {
+  local p="$1"
+  p="${p#\"}"; p="${p%\"}"
+  print -r -- "$p"
+}
+
+gitty_path_match_staged() {
+  local hint="$1" raw canon staged base
+  raw=$(gitty_path_from_display "$hint")
+  canon=$(gitty_path_canonical "$raw")
+  for staged in "${_gitty_staged_snapshot[@]}"; do
+    [[ "$(gitty_path_canonical "$staged")" == "$canon" ]] && { print -r -- "$staged"; return 0 }
+  done
+  base="${raw:t}"
+  for staged in "${_gitty_staged_snapshot[@]}"; do
+    [[ "${staged:t}" == "$base" ]] && { print -r -- "$staged"; return 0 }
+  done
+  [[ -n "$raw" ]] && { print -r -- "$raw"; return 0 }
+  return 1
+}
+
+gitty_resolve_push_offender() {
+  local output="$1" hint resolved
+  hint=$(gitty_parse_push_offender "$output" 2>/dev/null || true)
+  [[ -z "$hint" ]] && return 1
+  gitty_refresh_staged_snapshot
+  resolved=$(gitty_path_match_staged "$hint" 2>/dev/null || true)
+  [[ -n "$resolved" ]] && { print -r -- "$resolved"; return 0 }
+  return 1
+}
+
 gitty_record_held() {
   local path="$1" reason="$2"
   local existing
@@ -164,10 +201,10 @@ gitty_report_partial() {
   local i p
 
   if [[ "$committed" == true ]]; then
-    while IFS= read -r p; do
+    while IFS= read -r -d '' p; do
       [[ -z "$p" ]] && continue
       committed_paths+=("$p")
-    done < <("${GITTY_GIT[@]}" show --name-only --pretty=format: HEAD 2>/dev/null || true)
+    done < <("${GITTY_GIT[@]}" show --name-only --pretty=format: -z HEAD 2>/dev/null || true)
     pushed_count=${#committed_paths[@]}
   fi
 
@@ -466,7 +503,7 @@ while true; do
   fi
 
   offender=""
-  offender=$(gitty_parse_push_offender "$push_output" 2>/dev/null || true)
+  offender=$(gitty_resolve_push_offender "$push_output" 2>/dev/null || true)
   if [[ -z "$offender" || $push_attempt -ge $push_max ]]; then
     if echo "$push_output" | grep -qiE 'hook declined|BLOCKED|failed'; then
       echo "🔴 - Push blocked by hook" >&2

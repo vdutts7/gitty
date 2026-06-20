@@ -9,11 +9,10 @@ CHECK_COLLAB="$ROOT/.hooks/scripts/check-collaborator.sh"
 
 # 1: metadata strip
 if [[ -x "$CLEARMETA" ]]; then
-    staged=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
-    if [[ -n "$staged" ]]; then
-        while IFS= read -r f; do
+    if ! git -c core.quotePath=false diff --cached --quiet --diff-filter=ACM 2>/dev/null; then
+        while IFS= read -r -d '' f; do
             [[ -f "$f" && "$f" != ".git/"* ]] && "$CLEARMETA" -q "$f" 2>/dev/null && git add "$f" 2>/dev/null || true
-        done <<< "$staged"
+        done < <(git -c core.quotePath=false diff --cached --name-only -z --diff-filter=ACM 2>/dev/null)
         echo "[pre-commit] metadata stripped"
     fi
 fi
