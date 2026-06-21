@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp" alt="gitty icon" width="80" height="80" />
+  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1782018495" alt="gitty icon" width="80" height="80" />
 </p>
 
 <div align="center">
 
 <h1 align="center">gitty</h1>
-<p align="center"><i><b>git add, commit, force push — one command</b></i></p>
+<p align="center"><i><b>git add, commit, force push- one command</b></i></p>
 <p align="center"><i><b>any dir, any repo</b></i></p>
 
 [![GitHub][github-badge]][github-url]
@@ -35,8 +35,8 @@
 
 ### Problem
 
-1. Agents touch many repos per session — mini tasks, README chores, tangents, ideas
-2. Need fast checkpoints before/after agent runs — rollback when something gets nuked
+1. Agents touch many repos per session- mini tasks, README chores, tangents, ideas
+2. Need fast checkpoints before/after agent runs- rollback when something gets nuked
 3. `cd` + `git add` + `commit` + `push` per repo = friction
 4. One bad file (too large, submodule) blocks the whole checkpoint
 
@@ -44,7 +44,7 @@
 
 1. `gitty`: stage → commit → always `git push -f`
 2. **Partial mode**: hold back offenders; push everything else
-3. Any cwd — pass repo root or get prompted
+3. Any cwd- pass repo root or get prompted
 4. Logmoji: 🟡 in progress, 🟢 success, 🔴 failure
 5. Hook pass/fail dashboard when repo has `.hooks/`
 
@@ -83,8 +83,8 @@ gitty [commit_mssg] [root_dir]
 
 | Arg | Description |
 |-----|-------------|
-| `commit_mssg` | Commit message — prompted if omitted; default `..` |
-| `root_dir` | Absolute repo root — prompted if omitted; default `$PWD` |
+| `commit_mssg` | Commit message- prompted if omitted; default `..` |
+| `root_dir` | Absolute repo root- prompted if omitted; default `$PWD` |
 
 ```bash
 gitty "fix bug" /path/to/repo
@@ -118,7 +118,7 @@ Full reference: [docs/partial-commit.md](docs/partial-commit.md)
 
 ### Force push
 
-Always `git push -f`. Checkpoint workflow — overwrites remote branch. Use when you own the remote.
+Always `git push -f`. Checkpoint workflow- overwrites remote branch. Use when you own the remote.
 
 ### Clean tree
 
@@ -130,9 +130,9 @@ Nothing to commit → still force-pushes pending commits. Remote up to date → 
 |----------|---------|--------|
 | `GITTY_PARTIAL` | `1` | `0` disables holdback |
 | `GITTY_MAX_FILE_BYTES` | 100 MiB | Pre-commit size gate |
-| `README_CACHE_BUST` | — | `1` bumps README img `?v=` |
+| `README_CACHE_BUST` | - | `1` bumps README img `?v=` |
 
-More: [docs/environment.md](docs/environment.md) · Hooks: [docs/hooks.md](docs/hooks.md)
+More: [`docs/environment.md`](docs/environment.md) · Hooks: [`docs/hooks.md`](docs/hooks.md)
 
 <br/>
 
@@ -140,9 +140,9 @@ More: [docs/environment.md](docs/environment.md) · Hooks: [docs/hooks.md](docs/
 
 | Doc | Topic |
 |-----|-------|
-| [docs/README.md](docs/README.md) | Index |
-| [docs/partial-commit.md](docs/partial-commit.md) | Holdback logic |
-| [docs/commands.md](docs/commands.md) | All bins |
+| [`docs/README.md`](docs/README.md) | Index |
+| [`docs/partial-commit.md`](docs/partial-commit.md) | Holdback logic |
+| [`docs/commands.md`](docs/commands.md) | All bins |
 | [docs/environment.md](docs/environment.md) | Env vars |
 | [docs/hooks.md](docs/hooks.md) | Repo hooks |
 
@@ -167,7 +167,7 @@ gitty "added test" "$HOME/projects/example-repo"
 
 ## Contact
 
-<a href="https://vd7.io"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png" alt="vd7.io" height="40" /></a> &nbsp; <a href="https://x.com/vdutts7"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png" alt="/vdutts7" height="40" /></a>
+<a href="https://vd7.io"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1782018495" alt="vd7.io" height="40" /></a> &nbsp; <a href="https://x.com/vdutts7"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1782018495" alt="/vdutts7" height="40" /></a>
 
 [github-badge]: https://img.shields.io/badge/gitty-000000?style=for-the-badge&logo=github&logoColor=white
 [github-url]: https://github.com/vdutts7/gitty

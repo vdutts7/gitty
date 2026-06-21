@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Partial-commit smoke (downstream) — SSOT: $CURTOOLS/test/gitty-partial-commit.smoke.sh
+# Partial-commit smoke (downstream)- SSOT: $CURTOOLS/test/gitty-partial-commit.smoke.sh
 setopt errexit pipefail nounset
 
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${PATH:-}"
@@ -33,7 +33,7 @@ fi
 
 typeset -i PASS=0 FAIL=0
 _pass() { print -u2 "🟢 PASS $1"; PASS=$((PASS + 1)) }
-_fail() { print -u2 "🔴 FAIL $1 — $2"; FAIL=$((FAIL + 1)) }
+_fail() { print -u2 "🔴 FAIL $1 - $2"; FAIL=$((FAIL + 1)) }
 
 "$GIT" init --bare -b main -q "$BARE"
 cd "$FIXTURE" || exit 1
@@ -56,7 +56,7 @@ typeset -i rc=$?
 joined="${(j:\n:)out}"
 
 (( rc == 0 )) && _pass "exit 0" || _fail "exit 0" "got rc=$rc"
-print -r -- "$joined" | grep -q '🔴 - huge\.bin — held back' && _pass "holdback line" || _fail "holdback line" "missing"
+print -r -- "$joined" | grep -q '🔴 - huge\.bin - held back' && _pass "holdback line" || _fail "holdback line" "missing"
 print -r -- "$joined" | grep -q 'partial success' && _pass "partial dashboard" || _fail "partial dashboard" "missing"
 
 typeset -a committed=("${(@f)$("$GIT" -c core.quotePath=false show --name-only --pretty=format: HEAD 2>/dev/null)}")
