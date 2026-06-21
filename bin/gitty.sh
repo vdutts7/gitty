@@ -432,7 +432,6 @@ fi
 
 gitty_bust_readme() {
   local bust="${0:A:h}/readme-cache-bust.sh"
-  [[ -x "$bust" ]] || bust="${CURTOOLS:-$HOME/.cursor/tools}/git/readme-cache-bust.sh"
   [[ -x "$bust" && -f "$root_dir/README.md" ]] || return 0
   local -a bust_args=(--repo "$root_dir")
   if [[ "${README_CACHE_BUST:-}" == 1 ]]; then

@@ -57,8 +57,7 @@ Retries: `GITTY_PUSH_RETRIES` (default `8`).
 
 ## Canonical test
 
-- operator single source of truth (SSOT): `$CURTOOLS/test/gitty-partial-commit.smoke.sh`  
-- downstream (this repo): `tests/partial-commit.smoke.sh`
+- run: `tests/partial-commit.smoke.sh`
 
 ```bash
 npm run test:partial

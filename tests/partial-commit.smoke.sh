@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Partial-commit smoke (downstream)- SSOT: $CURTOOLS/test/gitty-partial-commit.smoke.sh
+# Partial-commit smoke test
 setopt errexit pipefail nounset
 
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${PATH:-}"
@@ -8,28 +8,13 @@ typeset -r REPO_ROOT="${0:A:h:h}"
 typeset -r GITTY_SCRIPT="${GITTY_SCRIPT:-$REPO_ROOT/bin/gitty.sh}"
 typeset -r GIT="/usr/bin/git"
 typeset -r PYTHON3="${PYTHON3:-$(command -v python3)}"
-typeset -r CUR="${CUR:-$HOME/.cursor}"
-typeset -r GENESIS_LIB="$CUR/tools/lib/smoke-genesis.sh"
 
 [[ -x "$GITTY_SCRIPT" ]] || { print -u2 "🔴 missing $GITTY_SCRIPT"; exit 1 }
 [[ -n "$PYTHON3" && -x "$PYTHON3" ]] || { print -u2 "🔴 missing python3"; exit 1 }
 
-if [[ -f "$GENESIS_LIB" ]]; then
-  # shellcheck source=/dev/null
-  source "$GENESIS_LIB"
-  SMOKE_NAMESPACE="gitty-partial"
-  smoke_genesis_init "$SMOKE_NAMESPACE" $$
-  export SMOKE_RUN_DIR
-  trap '_smoke_genesis_dispose_all' EXIT INT TERM
-  smoke_genesis_fixture_dir partial || exit 1
-  typeset -r FIXTURE="$SMOKE_LAST_FIXTURE_DIR"
-  trap 'smoke_genesis_cleanup_fixture partial' EXIT INT TERM
-  typeset -r BARE="$SMOKE_RUN_DIR/remote.git"
-else
-  typeset -r FIXTURE="$(mktemp -d /tmp/gitty-partial-fixture.XXXXXX)"
-  typeset -r BARE="$(mktemp -d /tmp/gitty-partial-bare.XXXXXX)"
-  trap 'trash -- "$FIXTURE" "$BARE" 2>/dev/null || true' EXIT INT TERM
-fi
+typeset -r FIXTURE="$(mktemp -d /tmp/gitty-partial-fixture.XXXXXX)"
+typeset -r BARE="$(mktemp -d /tmp/gitty-partial-bare.XXXXXX)"
+trap 'trash -- "$FIXTURE" "$BARE" 2>/dev/null || rm -rf "$FIXTURE" "$BARE" 2>/dev/null || true' EXIT INT TERM
 
 typeset -i PASS=0 FAIL=0
 _pass() { print -u2 "🟢 PASS $1"; PASS=$((PASS + 1)) }

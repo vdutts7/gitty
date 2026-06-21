@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # readme-cache-bust.sh — bump ?v= on README.md <img src> for GitHub render cache bust
-# SSOT: $CURREGISTRY/git/readme-cache-bust/manifest.json
 set -euo pipefail
 
 REPO=""
