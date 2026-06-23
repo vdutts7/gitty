@@ -10,13 +10,13 @@ USERNAME=$(git config user.name 2>/dev/null)
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 
-# Load owner: .env → repo.config.json → remote URL
+# Load owner: .env → repo.spine.json → remote URL
 if [[ -z "$REPO_OWNER" && -f "$ROOT/.env" ]]; then
     REPO_OWNER=$(grep -E '^(REPO_OWNER|GITHUB_OWNER)=' "$ROOT/.env" | head -1 | cut -d'"' -f2)
     [[ -z "$REPO_TOKEN" ]] && REPO_TOKEN=$(grep -E '^(REPO_TOKEN|GITHUB_TOKEN)=' "$ROOT/.env" | head -1 | cut -d'"' -f2)
 fi
-if [[ -z "$REPO_OWNER" && -f "$ROOT/repo.config.json" ]] && command -v jq &>/dev/null; then
-    REPO_OWNER=$(jq -r '.owner.username // .owner.github_username // empty' "$ROOT/repo.config.json" 2>/dev/null)
+if [[ -z "$REPO_OWNER" && -f "$ROOT/repo.spine.json" ]] && command -v jq &>/dev/null; then
+    REPO_OWNER=$(jq -r '.owner.username // .owner.github_username // empty' "$ROOT/repo.spine.json" 2>/dev/null)
 fi
 
 # Owner match → pass
