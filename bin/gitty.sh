@@ -227,7 +227,7 @@ gitty_report_partial() {
   elif [[ "$nothing_to_commit" == true && "$push_up_to_date" == true ]]; then
     echo "🟢 - remote — already up to date"
   elif [[ "$nothing_to_commit" == true ]]; then
-    echo "🟢 - push — pending commits force-pushed"
+    echo "🟢 - push — pending commits synced"
   fi
 
   if [[ $held_count -gt 0 ]]; then
@@ -513,16 +513,71 @@ push_up_to_date=false
 push_attempt=0
 push_max=${GITTY_PUSH_RETRIES:-8}
 
-echo "🟡 - Force pushing to remote..."
+# ---------- Safe additive sync (multi-host aware) ----------
+# Escape hatch: GITTY_FORCE=1 restores the old bulldoze behavior for solo repos.
 while true; do
   unsetopt errexit
-  if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
-    push_output=$(git push -f 2>&1)
+
+  if [[ "${GITTY_FORCE:-0}" == "1" ]]; then
+    echo "🟡 - Force pushing to remote (GITTY_FORCE=1)..."
+    if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+      push_output=$(git push -f 2>&1)
+    else
+      push_output=$(git push -f -u origin HEAD 2>&1)
+    fi
+    push_status=$?
   else
-    push_output=$(git push -f -u origin HEAD 2>&1)
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+    echo "🟡 - Fetching remote..."
+    git fetch origin "$branch" 2>/dev/null || git fetch origin 2>/dev/null || true
+
+    rebase_conflict=false
+    if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+      echo "🟡 - Rebasing onto origin/$branch (additive sync)..."
+      if ! git rebase --autostash "origin/$branch"; then
+        git rebase --abort 2>/dev/null || true
+        echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
+        echo "     Refusing to force-push over the other host's commits." >&2
+        push_output="rebase conflict"
+        push_status=1
+        rebase_conflict=true
+      fi
+    fi
+
+    if [[ "$rebase_conflict" != true ]]; then
+      echo "🟡 - Pushing to remote..."
+      if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+        push_output=$(git push origin "$branch" 2>&1)
+      else
+        push_output=$(git push -u origin HEAD 2>&1)
+      fi
+      push_status=$?
+
+      if [[ $push_status -ne 0 ]]; then
+        echo "🟡 - Push rejected; re-syncing and retrying with lease guard..."
+        git fetch origin "$branch" 2>/dev/null || true
+        if ! git rebase --autostash "origin/$branch"; then
+          git rebase --abort 2>/dev/null || true
+          echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
+          echo "     Refusing to force-push over the other host's commits." >&2
+          push_output="rebase conflict"
+          push_status=1
+          rebase_conflict=true
+        else
+          push_output=$(git push --force-with-lease origin "$branch" 2>&1)
+          push_status=$?
+        fi
+      fi
+    fi
   fi
-  push_status=$?
+
   setopt errexit
+
+  if [[ "${rebase_conflict:-false}" == true ]]; then
+    cd "$original_dir"
+    exit 1
+  fi
 
   if [[ $push_status -eq 0 ]]; then
     if echo "$push_output" | grep -qiE 'everything up-to-date|up to date'; then
@@ -596,10 +651,10 @@ elif [[ "$committed" == true ]]; then
   if [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
     echo "🟢 - Partial commit/push from $root_dir"
   else
-    echo "🟢 - Successfully committed and force pushed from $root_dir"
+    echo "🟢 - Successfully synced (additive) from $root_dir"
   fi
 elif [[ "$nothing_to_commit" == true ]]; then
-  echo "🟢 - Force pushed pending commits from $root_dir"
+  echo "🟢 - Synced pending commits from $root_dir"
 else
   echo "🟢 - Successfully added, committed, and pushed from $root_dir"
 fi
