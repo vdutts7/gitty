@@ -10,7 +10,7 @@ gitty [commit_message] [root_dir]
 
 | Arg | Default | Notes |
 |-----|---------|-------|
-| `commit_message` | prompted; `..` if empty | Used for every commit in the chain |
+| `commit_message` | prompted; `-------[gitty] snapshotting repo state-------` if empty | Used for every commit in the chain |
 | `root_dir` | prompted; `$PWD` if empty | **Must be absolute** |
 
 ### Chain

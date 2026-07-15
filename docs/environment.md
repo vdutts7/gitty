@@ -1,6 +1,6 @@
 # Environment variables
 
-Loaded at startup from `GITTY_ENV` if set, else `$HOME/scripts/.env` when that file exists.
+Process env only by default. Optional: set `GITTY_ENV` to a file path to `source` before knobs apply. No implicit home/Cursor path.
 
 ## gitty
 
@@ -10,7 +10,7 @@ Loaded at startup from `GITTY_ENV` if set, else `$HOME/scripts/.env` when that f
 | `GITTY_MAX_FILE_BYTES` | `104857600` (100 MiB) | Pre-commit size threshold for holdback |
 | `GITTY_PUSH_RETRIES` | `8` | Max push→holdback→recommit cycles |
 | `README_CACHE_BUST` | unset | `1` = force-bump `?v=` on all README `<img src>` |
-| `GITTY_ENV` | `$HOME/scripts/.env` | Alternate env file path |
+| `GITTY_ENV` | unset | If set to an existing file, `source` it (opt-in only) |
 
 ## Repo extension
 

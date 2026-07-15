@@ -83,7 +83,7 @@ gitty [commit_mssg] [root_dir]
 
 | Arg | Description |
 |-----|-------------|
-| `commit_mssg` | Commit message- prompted if omitted; default `..` |
+| `commit_mssg` | Commit message- prompted if omitted; default `-------[gitty] snapshotting repo state-------` |
 | `root_dir` | Absolute repo root- prompted if omitted; default `$PWD` |
 
 ```bash

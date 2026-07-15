@@ -45,10 +45,11 @@ done
 commit_mssg="$1"
 root_dir="$2"
 
+_GITTY_DEFAULT_MSG='-------[gitty] snapshotting repo state-------'
 [ -z "$commit_mssg" ] && {
-  echo -n "Enter commit message [default: ..]: "
+  echo -n "Enter commit message [default: ${_GITTY_DEFAULT_MSG}]: "
   read commit_mssg
-  [ -z "$commit_mssg" ] && commit_mssg=".."
+  [ -z "$commit_mssg" ] && commit_mssg="${_GITTY_DEFAULT_MSG}"
 }
 
 [ -z "$root_dir" ] && {

@@ -10,11 +10,10 @@ typeset -r _GITTY_ROOT="${0:A:h:h}"
 _gitty_partial_cli=${GITTY_PARTIAL-}
 _gitty_max_cli=${GITTY_MAX_FILE_BYTES-}
 
-# ---------- Load environment (optional; no-op if absent) ----------
-ENV_FILE="${GITTY_ENV:-$HOME/scripts/.env}"
-if [[ -f "$ENV_FILE" ]]; then
+# ---------- Load environment (opt-in via GITTY_ENV only) ----------
+if [[ -n "${GITTY_ENV:-}" && -f "$GITTY_ENV" ]]; then
   # shellcheck source=/dev/null
-  source "$ENV_FILE"
+  source "$GITTY_ENV"
 fi
 
 [[ -n "$_gitty_partial_cli" ]] && GITTY_PARTIAL="$_gitty_partial_cli"
@@ -344,6 +343,8 @@ gitty_usage_error() {
   exit 1
 }
 
+typeset -r _GITTY_DEFAULT_MSG='-------[gitty] snapshotting repo state-------'
+
 show_help() {
   cat << EOF
 Usage: gitty [-h|--help] [-V|--version] [commit_mssg] [root_dir]
@@ -355,7 +356,7 @@ Options:
   -V, --version   Show version
 
 Arguments:
-  commit_mssg  Commit message (prompts if omitted; default ..)
+  commit_mssg  Commit message (prompts if omitted; default ${_GITTY_DEFAULT_MSG})
   root_dir     Absolute repo root (prompts if omitted; default \$PWD)
 
 Examples:
@@ -387,9 +388,9 @@ commit_mssg="${gitty_positional[1]:-}"
 root_dir="${gitty_positional[2]:-}"
 
 [[ -z "$commit_mssg" ]] && {
-  echo -n "Enter commit message [default: ..]: "
+  echo -n "Enter commit message [default: ${_GITTY_DEFAULT_MSG}]: "
   read commit_mssg
-  [[ -z "$commit_mssg" ]] && commit_mssg=".."
+  [[ -z "$commit_mssg" ]] && commit_mssg="${_GITTY_DEFAULT_MSG}"
 }
 
 [[ -z "$root_dir" ]] && {
