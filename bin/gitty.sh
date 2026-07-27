@@ -499,15 +499,52 @@ elif echo "$commit_output" | grep -qiE 'nothing to commit|no changes added to co
     echo "🟢 - skipped (nothing to commit)"
   fi
 else
-  if echo "$commit_output" | grep -qiE 'hook declined|BLOCKED|failed'; then
-    echo "🔴 - Commit blocked by hook" >&2
-    gitty_report_hooks pre-commit "$commit_output" 1
-  else
-    echo "🔴 - Failed to commit changes" >&2
+  if [[ "${GITTY_NO_STALE_BASE_HEAL:-0}" != "1" ]] \
+     && [[ "${_gitty_stale_base_healed:-0}" != "1" ]] \
+     && echo "$commit_output" | grep -qE 'Stale-base guard'; then
+    _gitty_stale_base_healed=1
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    echo "🟡 - Stale-base guard fired; fetching + rebasing onto origin/$branch (additive autoheal)..."
+    git fetch origin "$branch" 2>/dev/null || git fetch origin 2>/dev/null || true
+    if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+      unsetopt errexit
+      git rebase --autostash "origin/$branch"
+      rebase_rc=$?
+      setopt errexit
+      if [[ $rebase_rc -eq 0 ]]; then
+        echo "🟢 - Rebase clean; re-staging and retrying commit..."
+        git add -A || true
+        gitty_refresh_staged_snapshot
+        gitty_holdback_offenders
+        unsetopt errexit
+        commit_output=$(gitty_commit_safe "$commit_mssg")
+        commit_status=$?
+        setopt errexit
+        if [[ $commit_status -eq 0 ]]; then
+          committed=true
+          echo "$commit_output"
+          gitty_report_hooks pre-commit "$commit_output" 0
+          echo "🟢 - Autohealed stale-base: rebased onto origin/$branch"
+        fi
+      else
+        git rebase --abort 2>/dev/null || true
+        echo "🔴 - Rebase conflicted during stale-base autoheal — real ledger collision." >&2
+        echo "     Resolve manually per additive-git; do not auto-pick sides on shared JSON ledgers." >&2
+      fi
+    fi
   fi
-  echo "$commit_output" >&2
-  cd "$original_dir"
-  exit 1
+
+  if [[ "$committed" != true ]]; then
+    if echo "$commit_output" | grep -qiE 'hook declined|BLOCKED|failed'; then
+      echo "🔴 - Commit blocked by hook" >&2
+      gitty_report_hooks pre-commit "$commit_output" 1
+    else
+      echo "🔴 - Failed to commit changes" >&2
+    fi
+    echo "$commit_output" >&2
+    cd "$original_dir"
+    exit 1
+  fi
 fi
 
 push_up_to_date=false
