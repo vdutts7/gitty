@@ -162,6 +162,56 @@ if command -v git-lfs &>/dev/null && git lfs env &>/dev/null; then
   echo "📎 LFS files:  $lfs_tracked"
 fi
 
+# ---------- Interrupted operations ----------
+# A half-finished rebase/merge is the single most common way a solo dev loses
+# a day: the worktree is mid-operation and the other machine's work is stuck.
+gitdir=$(git rev-parse --git-dir 2>/dev/null)
+if [[ -d "$gitdir/rebase-merge" || -d "$gitdir/rebase-apply" ]]; then
+  echo "🔴 Rebase in progress — worktree is mid-operation"
+  echo "   resolve: git rebase --continue   |   bail: git rebase --abort"
+  issues=$((issues + 1))
+elif [[ -f "$gitdir/MERGE_HEAD" ]]; then
+  echo "🔴 Merge in progress — worktree is mid-operation"
+  echo "   resolve: git merge --continue    |   bail: git merge --abort"
+  issues=$((issues + 1))
+fi
+
+# Unpushed work exists only on this machine. For a solo dev syncing across
+# machines that is the actual risk, not "uncommitted".
+if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+  unpushed=$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)
+  if [[ "$unpushed" -gt 0 ]]; then
+    echo "⚠️  $unpushed commit(s) exist only on this machine (unpushed)"
+    echo "   fix: gittysnap sync"
+    issues=$((issues + 1))
+  fi
+fi
+
+# ---------- Append-only ledger merge strategy ----------
+# .gitattributes is versioned, but merge.<name>.driver lives in .git/config and
+# is NOT cloned. A fresh clone silently falls back to the conflicting default,
+# so this is checked per clone rather than assumed.
+ledgers=$(git ls-files '*.ndjson' '*.jsonl' 2>/dev/null | wc -l | tr -d ' ')
+if [[ $ledgers -gt 0 ]]; then
+  echo "📒 Ledgers:    $ledgers .ndjson/.jsonl file(s)"
+  unguarded=0
+  while IFS= read -r ledger; do
+    [ -z "$ledger" ] && continue
+    attr=$(git check-attr merge -- "$ledger" 2>/dev/null | sed 's/.*merge: //')
+    [[ "$attr" == "unspecified" ]] && unguarded=$((unguarded + 1))
+  done < <(git ls-files '*.ndjson' '*.jsonl' 2>/dev/null)
+  if [[ $unguarded -gt 0 ]]; then
+    echo "   ⚠️  $unguarded ledger(s) have no merge strategy — concurrent appends WILL conflict"
+    echo "      fix: gittyunion install $root_dir"
+    issues=$((issues + 1))
+  elif [[ -z "$(git config --get merge.ndjson-union.driver 2>/dev/null)" ]] \
+       && grep -q 'merge=ndjson-union' .gitattributes 2>/dev/null; then
+    echo "   ⚠️  .gitattributes wants merge=ndjson-union but this clone has no driver registered"
+    echo "      fix: gittyunion install $root_dir"
+    issues=$((issues + 1))
+  fi
+fi
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [[ $issues -eq 0 ]]; then

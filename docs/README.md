@@ -1,13 +1,15 @@
 # gitty docs
 
-Reference for [@vd7/gitty](https://www.npmjs.com/package/@vd7/gitty).
+[@vd7/gitty](https://www.npmjs.com/package/@vd7/gitty)
 
-| Doc | What it covers |
-|-----|----------------|
-| [commands.md](commands.md) | `gitty`, `gittylfs`, `gittyembedded`, `gittyhealth` |
-| [partial-commit.md](partial-commit.md) | Hold back offenders; commit and push the rest |
-| [environment.md](environment.md) | Env vars and repo hooks integration |
-| [hooks.md](hooks.md) | Repo `.hooks/` vs npm-only install |
+| Doc | Covers |
+|---|---|
+| [commands.md](commands.md) | all bins |
+| [gittysnap.md](gittysnap.md) | snapshot-first multi-machine sync |
+| [gittyunion.md](gittyunion.md) | NDJSON/JSONL union merge driver |
+| [partial-commit.md](partial-commit.md) | hold back offenders |
+| [environment.md](environment.md) | env vars |
+| [hooks.md](hooks.md) | `.hooks/` vs npm-only |
 
 ## Quick start
 
@@ -16,13 +18,13 @@ npm i -g @vd7/gitty
 gitty "checkpoint" /absolute/path/to/repo
 ```
 
-Default flow: stage → partial holdback → commit → force push.
-
-## When to use which command
+## Which bin
 
 | Situation | Command |
-|-----------|---------|
+|---|---|
 | Normal checkpoint | `gitty` |
-| Large binary assets (LFS) | `gittylfs` |
-| Parent repo + dirty submodules | `gittyembedded` |
-| Inspect repo health only | `gittyhealth` |
+| Large binaries | `gittylfs` |
+| Dirty submodules | `gittyembedded` |
+| Inspect only | `gittyhealth` |
+| Solo laptop↔desktop | `gittysnap` |
+| Append-only `.ndjson`/`.jsonl` | `gittyunion install` |

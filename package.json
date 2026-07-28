@@ -1,12 +1,14 @@
 {
   "name": "@vd7/gitty",
-  "version": "0.3.13",
-  "description": "git add, commit, and force push in one command — partial holdback for oversized/submodule paths, plus LFS, submodule, and health-check variants",
+  "version": "0.5.0",
+  "description": "snapshot checkpoint CLI: gitty + gittysnap + gittyunion (content first)",
   "bin": {
     "gitty": "bin/gitty.sh",
     "gittylfs": "bin/gittylfs.sh",
     "gittyembedded": "bin/gittyembedded.sh",
-    "gittyhealth": "bin/gittyhealth.sh"
+    "gittyhealth": "bin/gittyhealth.sh",
+    "gittyunion": "bin/gittyunion.sh",
+    "gittysnap": "bin/gittysnap.sh"
   },
   "files": [
     "bin",
@@ -14,7 +16,9 @@
   ],
   "scripts": {
     "test": "bin/gitty.sh --help",
-    "test:partial": "tests/partial-commit.smoke.sh"
+    "test:partial": "zsh tests/partial-commit.smoke.sh",
+    "test:union": "zsh tests/ndjson-union.smoke.sh",
+    "test:snap": "zsh tests/gittysnap.smoke.sh"
   },
   "keywords": [
     "git",
@@ -24,7 +28,12 @@
     "workflow",
     "lfs",
     "submodule",
-    "health-check"
+    "health-check",
+    "merge-driver",
+    "ndjson",
+    "snapshot",
+    "sync",
+    "solo-dev"
   ],
   "author": "vdutts7",
   "license": "MIT",

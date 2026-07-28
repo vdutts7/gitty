@@ -1,12 +1,17 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1782018495" alt="gitty icon" width="80" height="80" />
+  <img
+    src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1782018495"
+    alt="gitty icon"
+    width="80"
+    height="80"
+  />
 </p>
 
 <div align="center">
 
 <h1 align="center">gitty</h1>
-<p align="center"><i><b>git add, commit, force push- one command</b></i></p>
-<p align="center"><i><b>any dir, any repo</b></i></p>
+<p align="center"><i><b>snapshot checkpoint: one command</b></i></p>
+<p align="center"><i><b>content first, clean history second</b></i></p>
 
 [![GitHub][github-badge]][github-url]
 [![npm][npm]][npm-url]
@@ -15,42 +20,105 @@
 
 <br/>
 
-## ToC
+---
 
-<ol>
-    <a href="#about">About</a><br/>
-    <a href="#install">Install</a><br/>
-    <a href="#commands">Commands</a><br/>
-    <a href="#usage">Usage</a><br/>
-    <a href="#partial-commit">Partial commit</a><br/>
-    <a href="#behavior">Behavior</a><br/>
-    <a href="#docs">Docs</a><br/>
-    <a href="#demo">Demo</a><br/>
-    <a href="#contact">Contact</a>
-</ol>
+<table>
+<thead>
+<tr>
+<th align="left"></th>
+<th align="left">Path</th>
+<th align="left">You get</th>
+<th align="left">Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">
+<img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp"
+width="40"
+height="40"
+alt="git"
+/>
+</td>
+<td align="left">
+<ul><li><code>pull --rebase --autostash</code></li></ul>
+</td>
+<td align="left">
+<ul>
+<li>false <code>rc=0</code></li>
+<li>stranded worktree</li>
+<li>one-machine only</li>
+</ul>
+</td>
+<td align="left">❌<br/><br/>sync theater</td>
+</tr>
+<tr>
+<td align="left">
+<img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp"
+width="40"
+height="40"
+alt="gittysnap"
+/>
+</td>
+<td align="left">
+<ul><li><code>gittysnap</code></li></ul>
+</td>
+<td align="left">
+<ul>
+<li><code>rc=2</code> on conflict</li>
+<li>clean worktree</li>
+<li>both on remote first</li>
+</ul>
+</td>
+<td align="left">✅<br/><br/>snapshot-first</td>
+</tr>
+</tbody>
+</table>
 
 <br/>
 
-## About
+## Issue
 
-### Problem
+### ❌ Checkpoint friction
 
-1. Agents touch many repos per session- mini tasks, README chores, tangents, ideas
-2. Need fast checkpoints before/after agent runs- rollback when something gets nuked
-3. `cd` + `git add` + `commit` + `push` per repo = friction
-4. One bad file (too large, submodule) blocks the whole checkpoint
+- agents touch many repos per session
 
-### Solution
+- `add` + `commit` + `push` per repo burns time
 
-1. `gitty`: stage → commit → always `git push -f`
-2. **Partial mode**: hold back offenders; push everything else
-3. Any cwd- pass repo root or get prompted
-4. Logmoji: 🟡 in progress, 🟢 success, 🔴 failure
-5. Hook pass/fail dashboard when repo has `.hooks/`
+- one oversized / submodule path blocks the whole run
 
-### Summary
+### ❌ Dual-machine strand
 
-One chain: `git add -A` → hold back blockers → `git commit` → `git push -f`. Agent-heavy multi-repo checkpointing. npm tarball = `bin/` + README only.
+- laptop + desktop both edit
+
+- rebase stops mid-flight: dirty tree, autostash gamble
+
+- other machine's work never left that machine
+
+### ❌ Append ledger false conflicts
+
+- two hosts append different `.ndjson` / `.jsonl` lines
+
+- git sees one slot, two lines → conflict
+
+- nothing was edited; both lines should keep
+
+<br/>
+
+## Options
+
+| | Bin | Job | When |
+|---|---|---|---|
+| ![gitty][i-gitty] | `gitty` | holdback → commit → push | default checkpoint |
+| ![lfs][i-lfs] | `gittylfs` | same + LFS track | big binaries |
+| ![git][i-git] | `gittyembedded` | submodules then parent | dirty nested repos |
+| ![health][i-health] | `gittyhealth` | report only | inspect / mid-op |
+| ![snap][i-snap] | `gittysnap` | snap → merge → abort clean | solo multi-machine |
+| ![union][i-json] | `gittyunion` | NDJSON union driver | append ledgers |
+
+Separate bins. Same package. Plain `gitty` ≠ `gittysnap`.
 
 <br/>
 
@@ -62,114 +130,66 @@ npm i -g @vd7/gitty
 
 <br/>
 
-## Commands
+## Run
 
-| Bin | Purpose |
-|-----|---------|
-| `gitty` | add, partial holdback, commit, force push |
-| `gittylfs` | same + LFS track/install |
-| `gittyembedded` | recurse submodules, then parent |
-| `gittyhealth` | repo health report only |
-
-Details: [docs/commands.md](docs/commands.md)
-
-<br/>
-
-## Usage
+```bash
+gitty "checkpoint" "$HOME/Documents/a/my-repo"
+gittysnap
+gittysnap snap
+gittyunion install
+```
 
 ```bash
 gitty [commit_mssg] [root_dir]
 ```
 
-| Arg | Description |
-|-----|-------------|
-| `commit_mssg` | Commit message- prompted if omitted; default `-------[gitty] snapshotting repo state-------` |
-| `root_dir` | Absolute repo root- prompted if omitted; default `$PWD` |
-
-```bash
-gitty "fix bug" /path/to/repo
-gitty "checkpoint" $HOME/projects/other-repo
-gitty "wip"          # root = $PWD
-gitty                # prompts for both
-```
+Partial holdback default on (`GITTY_PARTIAL=1`). Force bulldoze: `GITTY_FORCE=1`.
 
 <br/>
 
-## Partial commit
+## Gotchas
 
-When some paths cannot be pushed (oversized file, submodule pointer, remote rejection), `gitty` **holds them back locally** and commits/pushes the rest.
-
-```text
-🟡 - Held back: assets/huge.bin (exceeds push size limit)
-🟡 - 1 path(s) held back locally; proceeding with the rest
-...
-🟢 - Committed and force pushed (1 path(s) held back)
-```
-
-- Default on (`GITTY_PARTIAL=1`)
-- Submodules → use `gittyembedded`
-- Large binaries → use `gittylfs` or fix paths manually
-
-Full reference: [docs/partial-commit.md](docs/partial-commit.md)
-
-<br/>
-
-## Behavior
-
-### Force push
-
-Always `git push -f`. Checkpoint workflow- overwrites remote branch. Use when you own the remote.
-
-### Clean tree
-
-Nothing to commit → still force-pushes pending commits. Remote up to date → says so explicitly.
-
-### Env
-
-| Variable | Default | Effect |
-|----------|---------|--------|
-| `GITTY_PARTIAL` | `1` | `0` disables holdback |
-| `GITTY_MAX_FILE_BYTES` | 100 MiB | Pre-commit size gate |
-| `README_CACHE_BUST` | - | `1` bumps README img `?v=` |
-
-More: [`docs/environment.md`](docs/environment.md) · Hooks: [`docs/hooks.md`](docs/hooks.md)
+| problem | fix | stability | why |
+|---|---|---|---|
+| rebase strands worktree | `gittysnap` | stable | snap before integrate |
+| `.ndjson` append conflict | `gittyunion install` | stable | driver in `.git/config` (not cloned) |
+| fresh clone drops union | re-run `gitty` / `gittyunion install` | stable | attrs alone insufficient |
+| oversized path blocks push | leave `GITTY_PARTIAL=1` | stable | hold back; push the rest |
 
 <br/>
 
 ## Docs
 
 | Doc | Topic |
-|-----|-------|
-| [`docs/README.md`](docs/README.md) | Index |
-| [`docs/partial-commit.md`](docs/partial-commit.md) | Holdback logic |
-| [`docs/commands.md`](docs/commands.md) | All bins |
-| [docs/environment.md](docs/environment.md) | Env vars |
-| [docs/hooks.md](docs/hooks.md) | Repo hooks |
+|---|---|
+| [`docs/README`](docs/README%2Emd) | index |
+| [`docs/commands`](docs/commands%2Emd) | all bins |
+| [`docs/gittysnap`](docs/gittysnap%2Emd) | snapshot-first sync |
+| [`docs/gittyunion`](docs/gittyunion%2Emd) | NDJSON union driver |
+| [`docs/partial-commit`](docs/partial-commit%2Emd) | holdback |
+| [`docs/environment`](docs/environment%2Emd) | env |
+| [`docs/hooks`](docs/hooks%2Emd) | repo hooks |
 
-<br/>
-
-## Demo
-
-```bash
-touch "$HOME/projects/example-repo/test.txt"
-gitty "added test" "$HOME/projects/example-repo"
-```
-
-```text
-🟡 - Staging changes in /Users/you/projects/example-repo...
-🟡 - Committing changes...
-[main abc1234] added test
-🟡 - Force pushing to remote...
-🟢 - Successfully committed and force pushed from /Users/you/projects/example-repo
-```
+npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 
 <br/>
 
 ## Contact
 
-<a href="https://vd7.io"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1782018495" alt="vd7.io" height="40" /></a> &nbsp; <a href="https://x.com/vdutts7"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1782018495" alt="/vdutts7" height="40" /></a>
+[![vd7.io][badge-vd7]][vd7-url]
+[![/vdutts7][badge-x]][x-url]
 
 [github-badge]: https://img.shields.io/badge/gitty-000000?style=for-the-badge&logo=github&logoColor=white
 [github-url]: https://github.com/vdutts7/gitty
 [npm]: https://img.shields.io/badge/npm-@vd7/gitty-CB3837?style=for-the-badge&logo=npm
 [npm-url]: https://www.npmjs.com/package/@vd7/gitty
+[i-git]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp
+[i-gitty]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp
+[i-lfs]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git-lfs.webp
+[i-health]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/infomaniak-kcheck.webp
+[i-snap]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/borg-backup.webp
+[i-json]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/json.webp
+[badge-vd7]: https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1782018495
+[badge-x]: https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1782018495
+[vd7-url]: https://vd7.io
+[x-url]: https://x.com/vdutts7

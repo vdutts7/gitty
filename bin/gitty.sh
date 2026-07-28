@@ -431,8 +431,28 @@ if [[ -x "$root_dir/scripts/pre-gitty.sh" ]]; then
   "$root_dir/scripts/pre-gitty.sh"
 fi
 
+# A repo can declare `merge=ndjson-union` in .gitattributes, but the driver itself
+# lives in .git/config, which is NOT cloned. In a fresh clone the name resolves to
+# nothing and git silently falls back to the conflicting default merge -- worse than
+# having declared nothing at all. Re-register it here so the declaration is honored.
+# Derivable, idempotent, and non-destructive. Opt out with GITTY_NO_UNION_AUTOINSTALL=1.
+gitty_ensure_union_driver() {
+  [[ "${GITTY_NO_UNION_AUTOINSTALL:-}" == 1 ]] && return 0
+  [[ -f "$root_dir/.gitattributes" ]] || return 0
+  grep -q 'merge=ndjson-union' "$root_dir/.gitattributes" 2>/dev/null || return 0
+  [[ -z "$(git config --get merge.ndjson-union.driver 2>/dev/null)" ]] || return 0
+  local union="${${(%):-%x}:A:h}/gittyunion.sh"
+  [[ -x "$union" ]] || return 0
+  git config merge.ndjson-union.name "union merge for append-only NDJSON ledgers" 2>/dev/null || return 0
+  git config merge.ndjson-union.driver "'$union' merge %O %A %B %P" 2>/dev/null || return 0
+  git config merge.ndjson-union.recursive binary 2>/dev/null || true
+  echo "🟢 - Registered ndjson-union merge driver (declared in .gitattributes, missing in this clone)"
+}
+
+gitty_ensure_union_driver
+
 gitty_bust_readme() {
-  local bust="${0:A:h}/readme-cache-bust.sh"
+  local bust="${${(%):-%x}:A:h}/readme-cache-bust.sh"
   [[ -x "$bust" && -f "$root_dir/README.md" ]] || return 0
   local -a bust_args=(--repo "$root_dir")
   if [[ "${README_CACHE_BUST:-}" == 1 ]]; then
