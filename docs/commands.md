@@ -54,7 +54,7 @@ Submodule push failures warn; parent chain continues.
 
 ## gittyhealth
 
-Read-only report: branch, remote, status, stashes, size, mid-rebase/merge, unpushed-only-local, ledger merge attrs.
+Read-only report: branch, remote, status, stashes (promote-to-`bak/` hint when non-empty), size, mid-rebase/merge, unpushed-only-local, ledger merge attrs.
 
 ```bash
 gittyhealth [root_dir]

@@ -122,7 +122,15 @@ echo "   Untracked:  $untracked file(s)"
 # ---------- Stashes ----------
 stash_count=$(git stash list 2>/dev/null | wc -l | tr -d ' ')
 echo "📦 Stashes:    $stash_count"
-[[ $stash_count -gt 0 ]] && echo "   ℹ️  You have stashed changes"
+if [[ $stash_count -gt 0 ]]; then
+  echo "   ℹ️  You have stashed changes"
+  echo "   💡 refs/stash is out-of-band (silently lossy on pop-conflict / clear / gc)."
+  echo "      Promote each entry to a first-class bak/ branch before any rebase or merge:"
+  echo "        for i in \$(seq 0 \$((stash_count-1))); do"
+  echo "          git branch bak/stash-\${i}-\$(date -u +%Y%m%dT%H%M%SZ) stash@{\${i}}"
+  echo "        done && git stash clear   # only after every promotion succeeds"
+  echo "      A commit or a branch is a snapshot; a stash is a gamble."
+fi
 
 echo ""
 
