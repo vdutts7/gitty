@@ -152,6 +152,7 @@ Partial holdback default on (`GITTY_PARTIAL=1`). Force bulldoze: `GITTY_FORCE=1`
 | problem | fix | stability | why |
 |---|---|---|---|
 | rebase strands worktree | `gittysnap` | stable | snap before integrate |
+| `--autostash` half-applies | `gitty` uses `bak/*` snapshot refs | stable | stash is not a recoverable ref |
 | `.ndjson` append conflict | `gittyunion install` | stable | driver in `.git/config` (not cloned) |
 | fresh clone drops union | re-run `gitty` / `gittyunion install` | stable | attrs alone insufficient |
 | oversized path blocks push | leave `GITTY_PARTIAL=1` | stable | hold back; push the rest |

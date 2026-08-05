@@ -47,6 +47,19 @@ gitty_read_staged_paths() {
 
 gitty_refresh_staged_snapshot() { gitty_read_staged_paths; }
 
+# Snapshot before rebase. NEVER --autostash: pop-conflict leaves half-applied
+# bytes with no recoverable first-class ref. A branch is a snapshot; a stash is not.
+gitty_snapshot_before_rebase() {
+  local kind="${1:-rebase}"
+  local snap="bak/${kind}-$(date -u +%Y%m%dT%H%M%SZ)"
+  if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+    git add -A 2>/dev/null || true
+    git commit -m "wip: gitty ${kind} snapshot" >/dev/null 2>&1 || true
+  fi
+  git branch "$snap" HEAD 2>/dev/null || true
+  echo "🟡 - Snapshot ref: $snap (recoverable if rebase conflicts)"
+}
+
 gitty_path_canonical() {
   local p="$1"
   command -v python3 >/dev/null 2>&1 || { print -r -- "$p"; return 0 }
@@ -524,11 +537,12 @@ else
      && echo "$commit_output" | grep -qE 'Stale-base guard'; then
     _gitty_stale_base_healed=1
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    echo "🟡 - Stale-base guard fired; fetching + rebasing onto origin/$branch (additive autoheal)..."
+    echo "🟡 - Stale-base guard fired; fetching + rebasing onto origin/$branch (additive autoheal, snapshot-branch)..."
     git fetch origin "$branch" 2>/dev/null || git fetch origin 2>/dev/null || true
     if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+      gitty_snapshot_before_rebase autoheal
       unsetopt errexit
-      git rebase --autostash "origin/$branch"
+      git rebase "origin/$branch"
       rebase_rc=$?
       setopt errexit
       if [[ $rebase_rc -eq 0 ]]; then
@@ -548,8 +562,9 @@ else
         fi
       else
         git rebase --abort 2>/dev/null || true
-        echo "🔴 - Rebase conflicted during stale-base autoheal — real ledger collision." >&2
-        echo "     Resolve manually per additive-git; do not auto-pick sides on shared JSON ledgers." >&2
+        echo "🔴 - Rebase conflicted during stale-base autoheal: real ledger collision." >&2
+        echo "     Resolve manually; do not auto-pick sides on shared JSON ledgers." >&2
+        echo "     Snapshot branch bak/autoheal-* still points at pre-rebase HEAD." >&2
       fi
     fi
   fi
@@ -593,10 +608,12 @@ while true; do
     rebase_conflict=false
     if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
       echo "🟡 - Rebasing onto origin/$branch (additive sync)..."
-      if ! git rebase --autostash "origin/$branch"; then
+      gitty_snapshot_before_rebase sync
+      if ! git rebase "origin/$branch"; then
         git rebase --abort 2>/dev/null || true
         echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
         echo "     Refusing to force-push over the other host's commits." >&2
+        echo "     Snapshot branch bak/sync-* still points at pre-rebase HEAD." >&2
         push_output="rebase conflict"
         push_status=1
         rebase_conflict=true
@@ -615,10 +632,12 @@ while true; do
       if [[ $push_status -ne 0 ]]; then
         echo "🟡 - Push rejected; re-syncing and retrying with lease guard..."
         git fetch origin "$branch" 2>/dev/null || true
-        if ! git rebase --autostash "origin/$branch"; then
+        gitty_snapshot_before_rebase sync
+        if ! git rebase "origin/$branch"; then
           git rebase --abort 2>/dev/null || true
           echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
           echo "     Refusing to force-push over the other host's commits." >&2
+          echo "     Snapshot branch bak/sync-* still points at pre-rebase HEAD." >&2
           push_output="rebase conflict"
           push_status=1
           rebase_conflict=true

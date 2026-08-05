@@ -44,3 +44,7 @@ Bundled: `bin/readme-cache-bust.sh` (+ `.py`).
 GITTY_MAX_FILE_BYTES=$((50 * 1024 * 1024)) gitty "assets" /path/to/repo
 GITTY_PARTIAL=0 gitty "all or nothing" /path/to/repo
 ```
+
+## Rebase snapshots
+
+Before rebase (stale-base autoheal + additive sync), `gitty` wip-commits dirty state and creates `bak/<kind>-<utc>` so conflict recovery is a first-class ref. Never `--autostash`.
