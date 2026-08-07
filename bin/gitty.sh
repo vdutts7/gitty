@@ -78,7 +78,6 @@ gitty_drip_through_conflict() {
     return 1
   fi
 
-  echo "🟡 - ${#conflict_paths[@]} path(s) conflict with remote; dripping through the rest..."
   for cp in "${conflict_paths[@]}"; do
     gitty_record_held "$cp" "rebase conflict with remote"
   done
@@ -97,9 +96,12 @@ gitty_drip_through_conflict() {
   gitty_refresh_staged_snapshot
 
   if git diff --cached --quiet 2>/dev/null; then
-    echo "🔴 - All changed paths conflict with remote. Resolve manually, then re-run gitty." >&2
+    echo "🔴 - ${#conflict_paths[@]} path(s) conflict with remote — nothing else to push." >&2
+    echo "     Resolve, then re-run gitty. Snapshot: bak/sync-*" >&2
     return 1
   fi
+
+  echo "🟡 - ${#conflict_paths[@]} path(s) held back (conflict); pushing ${#_gitty_staged_snapshot[@]} clean path(s)..."
 
   # Commit the non-conflicting subset
   echo "🟡 - Recommitting non-conflicting paths..."
@@ -797,12 +799,8 @@ while true; do
         rebase_conflict=true
       elif ! git rebase "origin/$branch"; then
         if gitty_drip_through_conflict "$commit_mssg"; then
-          # Partial success — drip-through committed+rebased the non-conflicting subset
           :
         else
-          echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
-          echo "     Refusing to force-push over the other host's commits." >&2
-          echo "     Snapshot branch bak/sync-* still points at pre-rebase HEAD." >&2
           push_output="rebase conflict"
           push_status=1
           rebase_conflict=true
@@ -839,9 +837,6 @@ while true; do
             push_output=$(git push --force-with-lease origin "$branch" 2>&1)
             push_status=$?
           else
-            echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
-            echo "     Refusing to force-push over the other host's commits." >&2
-            echo "     Snapshot branch bak/sync-* still points at pre-rebase HEAD." >&2
             push_output="rebase conflict"
             push_status=1
             rebase_conflict=true
