@@ -84,3 +84,7 @@ GITTY_PARTIAL=0 gitty "message" /path/to/repo
 ## Large files with LFS
 
 - `gitty` does not configure Git LFS. For LFS-tracked patterns, use `gittylfs`
+
+## Rebase drip-through
+
+On rebase conflict with remote (additive sync / stale-base autoheal), `gitty` holds back conflicting paths and commits+pushes the rest when `GITTY_PARTIAL=1` (default). Hard-exits only if every path conflicts or `GITTY_PARTIAL=0`.

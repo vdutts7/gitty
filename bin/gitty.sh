@@ -58,6 +58,77 @@ gitty_refresh_staged_snapshot() { gitty_read_staged_paths; }
 #   a WIP snapshot commit that a hook silently rejected, etc.
 # Defense: byte-level detection at every gate, not exit-code trust.
 
+# Drip-through: extract conflicting paths from a failed rebase, hold them back,
+# re-commit+push the rest. Returns 0 if partial push succeeded, 1 if all paths conflict.
+gitty_drip_through_conflict() {
+  local msg="$1"
+  local -a conflict_paths=()
+  local cp
+
+  # Grab unmerged paths before aborting
+  while IFS= read -r cp; do
+    [[ -n "$cp" ]] && conflict_paths+=("$cp")
+  done < <(git diff --name-only --diff-filter=U 2>/dev/null; git ls-files -u 2>/dev/null | awk '{print $4}' | sort -u)
+  # Deduplicate
+  typeset -aU conflict_paths=("${conflict_paths[@]}")
+
+  git rebase --abort 2>/dev/null || true
+
+  if [[ ${#conflict_paths[@]} -eq 0 || "${GITTY_PARTIAL:-1}" == "0" ]]; then
+    return 1
+  fi
+
+  echo "🟡 - ${#conflict_paths[@]} path(s) conflict with remote; dripping through the rest..."
+  for cp in "${conflict_paths[@]}"; do
+    gitty_record_held "$cp" "rebase conflict with remote"
+  done
+
+  # Soft-reset our commit so we can re-stage without conflict paths
+  if [[ "$committed" == true ]]; then
+    git reset --soft HEAD~1 2>/dev/null || true
+    committed=false
+  fi
+
+  # Re-stage everything except conflict paths
+  git add -A 2>/dev/null || true
+  for cp in "${conflict_paths[@]}"; do
+    "${GITTY_GIT[@]}" reset HEAD -- "$cp" 2>/dev/null || true
+  done
+  gitty_refresh_staged_snapshot
+
+  if git diff --cached --quiet 2>/dev/null; then
+    echo "🔴 - All changed paths conflict with remote. Resolve manually, then re-run gitty." >&2
+    return 1
+  fi
+
+  # Commit the non-conflicting subset
+  echo "🟡 - Recommitting non-conflicting paths..."
+  unsetopt errexit
+  local drip_output
+  drip_output=$(gitty_commit_safe "$msg")
+  local drip_rc=$?
+  setopt errexit
+  if [[ $drip_rc -ne 0 ]]; then
+    echo "🔴 - Failed to recommit drip-through subset" >&2
+    return 1
+  fi
+  committed=true
+  echo "$drip_output"
+
+  # Rebase the smaller commit (no overlap with conflict paths)
+  git fetch origin "$branch" 2>/dev/null || true
+  if ! gitty_snapshot_before_rebase drip; then
+    return 1
+  fi
+  if ! git rebase "origin/$branch"; then
+    git rebase --abort 2>/dev/null || true
+    echo "🔴 - Drip-through subset still conflicts. Resolve manually." >&2
+    return 1
+  fi
+  gitty_undo_wip_snapshot
+  return 0
+}
+
 # 0 = clean, 1 = conflict/unmerged markers present
 gitty_working_tree_has_conflict() {
   local unmerged
@@ -669,10 +740,13 @@ else
         fi
         fi
       else
-        git rebase --abort 2>/dev/null || true
-        echo "🔴 - Rebase conflicted during stale-base autoheal: real ledger collision." >&2
-        echo "     Resolve manually; do not auto-pick sides on shared JSON ledgers." >&2
-        echo "     Snapshot branch bak/autoheal-* still points at pre-rebase HEAD." >&2
+        if gitty_drip_through_conflict "$commit_mssg"; then
+          echo "🟢 - Partial autoheal: non-conflicting paths committed"
+        else
+          echo "🔴 - Rebase conflicted during stale-base autoheal: real ledger collision." >&2
+          echo "     Resolve manually; do not auto-pick sides on shared JSON ledgers." >&2
+          echo "     Snapshot branch bak/autoheal-* still points at pre-rebase HEAD." >&2
+        fi
       fi
       fi
     fi
@@ -722,13 +796,17 @@ while true; do
         push_status=1
         rebase_conflict=true
       elif ! git rebase "origin/$branch"; then
-        git rebase --abort 2>/dev/null || true
-        echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
-        echo "     Refusing to force-push over the other host's commits." >&2
-        echo "     Snapshot branch bak/sync-* still points at pre-rebase HEAD." >&2
-        push_output="rebase conflict"
-        push_status=1
-        rebase_conflict=true
+        if gitty_drip_through_conflict "$commit_mssg"; then
+          # Partial success — drip-through committed+rebased the non-conflicting subset
+          :
+        else
+          echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
+          echo "     Refusing to force-push over the other host's commits." >&2
+          echo "     Snapshot branch bak/sync-* still points at pre-rebase HEAD." >&2
+          push_output="rebase conflict"
+          push_status=1
+          rebase_conflict=true
+        fi
       elif gitty_working_tree_has_conflict; then
         echo "🔴 - Rebase reported clean but conflict markers detected in tree." >&2
         echo "     Refusing to push. Snapshot branch bak/sync-* holds pre-rebase HEAD." >&2
@@ -757,13 +835,17 @@ while true; do
           push_status=1
           rebase_conflict=true
         elif ! git rebase "origin/$branch"; then
-          git rebase --abort 2>/dev/null || true
-          echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
-          echo "     Refusing to force-push over the other host's commits." >&2
-          echo "     Snapshot branch bak/sync-* still points at pre-rebase HEAD." >&2
-          push_output="rebase conflict"
-          push_status=1
-          rebase_conflict=true
+          if gitty_drip_through_conflict "$commit_mssg"; then
+            push_output=$(git push --force-with-lease origin "$branch" 2>&1)
+            push_status=$?
+          else
+            echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
+            echo "     Refusing to force-push over the other host's commits." >&2
+            echo "     Snapshot branch bak/sync-* still points at pre-rebase HEAD." >&2
+            push_output="rebase conflict"
+            push_status=1
+            rebase_conflict=true
+          fi
         elif gitty_working_tree_has_conflict; then
           echo "🔴 - Rebase reported clean but conflict markers detected in tree." >&2
           echo "     Refusing to force-push. Snapshot branch bak/sync-* holds pre-rebase HEAD." >&2
@@ -782,8 +864,13 @@ while true; do
   setopt errexit
 
   if [[ "${rebase_conflict:-false}" == true ]]; then
-    cd "$original_dir"
-    exit 1
+    if [[ ${#gitty_held_paths[@]} -gt 0 && "$committed" == true ]]; then
+      # Partial drip-through succeeded — don't exit, fall through to push
+      :
+    else
+      cd "$original_dir"
+      exit 1
+    fi
   fi
 
   if [[ $push_status -eq 0 ]]; then

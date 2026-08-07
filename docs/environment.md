@@ -52,3 +52,7 @@ GITTY_PARTIAL=0 gitty "all or nothing" /path/to/repo
 Before rebase (stale-base autoheal + additive sync), `gitty` wip-commits dirty state (`--no-verify`) and creates `bak/<kind>-<utc>` so conflict recovery is a first-class ref. Never `--autostash`. After a clean rebase the WIP tip is unwound so the user's real commit message lands.
 
 Entry refuse (opt-out env above): mid-rebase/merge/cherry-pick, or conflict markers / unmerged paths already in the tree. Post-rebase, markers are re-checked before any `git add -A`.
+
+## Drip-through
+
+`GITTY_PARTIAL=1` (default) also covers rebase conflicts with remote: conflicting paths are held back; the rest still commit+push.
