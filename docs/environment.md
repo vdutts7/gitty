@@ -12,6 +12,8 @@ Process env only by default. Optional: set `GITTY_ENV` to a file path to `source
 | `GITTY_FORCE` | unset | `1` = bulldoze `push -f` (solo escape hatch) |
 | `GITTY_NO_STALE_BASE_HEAL` | unset | `1` = skip stale-base autoheal |
 | `GITTY_NO_UNION_AUTOINSTALL` | unset | `1` = skip ndjson-union auto-register |
+| `GITTY_ALLOW_INPROGRESS` | unset | `1` = allow run during mid-rebase/merge/cherry-pick (default: refuse) |
+| `GITTY_ALLOW_CONFLICTS` | unset | `1` = allow run with conflict markers/unmerged paths (default: refuse) |
 | `README_CACHE_BUST` | unset | `1` = force-bump `?v=` on all README `<img src>` |
 | `GITTY_ENV` | unset | if set to an existing file, `source` it (opt-in only) |
 
@@ -47,4 +49,6 @@ GITTY_PARTIAL=0 gitty "all or nothing" /path/to/repo
 
 ## Rebase snapshots
 
-Before rebase (stale-base autoheal + additive sync), `gitty` wip-commits dirty state and creates `bak/<kind>-<utc>` so conflict recovery is a first-class ref. Never `--autostash`.
+Before rebase (stale-base autoheal + additive sync), `gitty` wip-commits dirty state (`--no-verify`) and creates `bak/<kind>-<utc>` so conflict recovery is a first-class ref. Never `--autostash`. After a clean rebase the WIP tip is unwound so the user's real commit message lands.
+
+Entry refuse (opt-out env above): mid-rebase/merge/cherry-pick, or conflict markers / unmerged paths already in the tree. Post-rebase, markers are re-checked before any `git add -A`.

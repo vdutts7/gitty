@@ -47,17 +47,88 @@ gitty_read_staged_paths() {
 
 gitty_refresh_staged_snapshot() { gitty_read_staged_paths; }
 
+# ---------- Conflict + rebase-state guards ----------
+# Root cause of the class of bugs this guards against:
+#   `git rebase --autostash` can rebase the branch cleanly (rc=0) yet leave
+#   conflict markers in the working tree when the autostash reapply hits
+#   a conflict. A naive `git add -A` after "rebase clean" then STAGES those
+#   markers and drives them into a commit — the pre-commit JSON hook is the
+#   only thing that stops corruption. Same class: pre-existing unmerged
+#   entries from an aborted merge, an in-progress rebase from a prior crash,
+#   a WIP snapshot commit that a hook silently rejected, etc.
+# Defense: byte-level detection at every gate, not exit-code trust.
+
+# 0 = clean, 1 = conflict/unmerged markers present
+gitty_working_tree_has_conflict() {
+  local unmerged
+  unmerged=$(git ls-files -u 2>/dev/null | head -c1)
+  [[ -n "$unmerged" ]] && return 0
+  # `git diff --check` reports leftover conflict markers (rc=2) and whitespace
+  # errors (rc=1). Only conflict markers should trip this guard, so scan output
+  # rather than trust rc alone. Do NOT combine with --quiet: --quiet short-
+  # circuits on the first diff regardless of --check.
+  local check_out
+  check_out=$(git -c color.ui=never diff --check 2>/dev/null; git -c color.ui=never diff --cached --check 2>/dev/null)
+  [[ "$check_out" == *"conflict marker"* ]] && return 0
+  return 1
+}
+
+# 0 = a merge/rebase/cherry-pick is mid-flight, 1 = none
+gitty_rebase_in_progress() {
+  local gd
+  gd=$(git rev-parse --git-dir 2>/dev/null) || return 1
+  [[ -d "$gd/rebase-merge" ]] && return 0
+  [[ -d "$gd/rebase-apply" ]] && return 0
+  [[ -f "$gd/MERGE_HEAD" ]]  && return 0
+  [[ -f "$gd/CHERRY_PICK_HEAD" ]] && return 0
+  return 1
+}
+
 # Snapshot before rebase. NEVER --autostash: pop-conflict leaves half-applied
 # bytes with no recoverable first-class ref. A branch is a snapshot; a stash is not.
+# Contract: returns 0 iff working tree is clean AFTER snapshot (safe to rebase).
+#           returns 1 if a hook rejected the WIP commit and the tree stayed dirty.
 gitty_snapshot_before_rebase() {
   local kind="${1:-rebase}"
   local snap="bak/${kind}-$(date -u +%Y%m%dT%H%M%SZ)"
+  _gitty_wip_snapshot_made=0
+  _gitty_wip_snapshot_subject=""
   if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+    if gitty_working_tree_has_conflict; then
+      echo "🔴 - Refusing to snapshot: working tree has unresolved conflict markers or unmerged paths." >&2
+      echo "     Run 'git status' + 'git diff --check' and resolve before re-running gitty." >&2
+      return 1
+    fi
     git add -A 2>/dev/null || true
-    git commit -m "wip: gitty ${kind} snapshot" >/dev/null 2>&1 || true
+    _gitty_wip_snapshot_subject="wip: gitty ${kind} snapshot"
+    if git commit --no-verify -m "$_gitty_wip_snapshot_subject" >/dev/null 2>&1; then
+      _gitty_wip_snapshot_made=1
+    fi
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+      echo "🔴 - WIP snapshot commit did not take (hook or index refused); working tree still dirty." >&2
+      echo "     Refusing to rebase — would either abort or attempt --autostash class of failure." >&2
+      return 1
+    fi
   fi
   git branch "$snap" HEAD 2>/dev/null || true
   echo "🟡 - Snapshot ref: $snap (recoverable if rebase conflicts)"
+  return 0
+}
+
+# After a successful rebase, if we injected a WIP snapshot commit at the tip,
+# unwind it so the user's real commit message becomes the visible commit.
+# Contract: leaves working tree matching pre-WIP state (indexed + unindexed
+# changes restored) OR no-ops if we never made a WIP commit.
+gitty_undo_wip_snapshot() {
+  [[ "${_gitty_wip_snapshot_made:-0}" == "1" ]] || return 0
+  local tip_subject
+  tip_subject=$(git log -1 --pretty=%s 2>/dev/null || true)
+  if [[ "$tip_subject" == "$_gitty_wip_snapshot_subject" ]]; then
+    git reset --soft HEAD~1 >/dev/null 2>&1 || true
+    git reset HEAD -- . >/dev/null 2>&1 || true
+  fi
+  _gitty_wip_snapshot_made=0
+  _gitty_wip_snapshot_subject=""
 }
 
 gitty_path_canonical() {
@@ -444,6 +515,29 @@ if [[ -x "$root_dir/scripts/pre-gitty.sh" ]]; then
   "$root_dir/scripts/pre-gitty.sh"
 fi
 
+# Refuse to proceed if a rebase/merge/cherry-pick is mid-flight — otherwise the
+# stale-base autoheal path would layer a new rebase on top of an in-progress one
+# and produce genuinely unrecoverable state. Opt out with GITTY_ALLOW_INPROGRESS=1
+# only if you know what you're doing (e.g. re-entering after resolving markers).
+if [[ "${GITTY_ALLOW_INPROGRESS:-0}" != "1" ]] && gitty_rebase_in_progress; then
+  echo "🔴 - A rebase/merge/cherry-pick is in progress in $root_dir." >&2
+  echo "     Finish it (git rebase --continue / --abort, git merge --abort, etc.) or set" >&2
+  echo "     GITTY_ALLOW_INPROGRESS=1 to force. Refusing to run — would compound the state." >&2
+  cd "$original_dir"
+  exit 1
+fi
+
+# Same for pre-existing unresolved conflict markers in the working tree.
+if [[ "${GITTY_ALLOW_CONFLICTS:-0}" != "1" ]] && gitty_working_tree_has_conflict; then
+  echo "🔴 - Working tree has conflict markers or unmerged paths in $root_dir." >&2
+  echo "     Run 'git status', 'git diff --check', resolve, then re-run gitty." >&2
+  echo "     Set GITTY_ALLOW_CONFLICTS=1 to override (not recommended — the pre-commit" >&2
+  echo "     hooks may still reject the commit, and force-pushing conflict markers is" >&2
+  echo "     the exact failure mode this guard exists to prevent)." >&2
+  cd "$original_dir"
+  exit 1
+fi
+
 # A repo can declare `merge=ndjson-union` in .gitattributes, but the driver itself
 # lives in .git/config, which is NOT cloned. In a fresh clone the name resolves to
 # nothing and git silently falls back to the conflicting default merge -- worse than
@@ -540,14 +634,27 @@ else
     echo "🟡 - Stale-base guard fired; fetching + rebasing onto origin/$branch (additive autoheal, snapshot-branch)..."
     git fetch origin "$branch" 2>/dev/null || git fetch origin 2>/dev/null || true
     if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
-      gitty_snapshot_before_rebase autoheal
+      if ! gitty_snapshot_before_rebase autoheal; then
+        echo "🔴 - Autoheal aborted before rebase (see snapshot error above)." >&2
+      else
       unsetopt errexit
       git rebase "origin/$branch"
       rebase_rc=$?
       setopt errexit
+      if [[ $rebase_rc -eq 0 ]] && gitty_working_tree_has_conflict; then
+        rebase_rc=99
+        echo "🔴 - Rebase reported clean but conflict markers detected in tree (autostash-class residue)." >&2
+        echo "     Refusing to stage. Snapshot branch bak/autoheal-* holds pre-rebase HEAD." >&2
+      fi
       if [[ $rebase_rc -eq 0 ]]; then
+        gitty_undo_wip_snapshot
         echo "🟢 - Rebase clean; re-staging and retrying commit..."
         git add -A || true
+        if gitty_working_tree_has_conflict; then
+          echo "🔴 - Conflict markers appeared during re-stage; aborting autoheal." >&2
+          git reset -q HEAD -- . 2>/dev/null || true
+          committed=false
+        else
         gitty_refresh_staged_snapshot
         gitty_holdback_offenders
         unsetopt errexit
@@ -560,11 +667,13 @@ else
           gitty_report_hooks pre-commit "$commit_output" 0
           echo "🟢 - Autohealed stale-base: rebased onto origin/$branch"
         fi
+        fi
       else
         git rebase --abort 2>/dev/null || true
         echo "🔴 - Rebase conflicted during stale-base autoheal: real ledger collision." >&2
         echo "     Resolve manually; do not auto-pick sides on shared JSON ledgers." >&2
         echo "     Snapshot branch bak/autoheal-* still points at pre-rebase HEAD." >&2
+      fi
       fi
     fi
   fi
@@ -608,8 +717,11 @@ while true; do
     rebase_conflict=false
     if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
       echo "🟡 - Rebasing onto origin/$branch (additive sync)..."
-      gitty_snapshot_before_rebase sync
-      if ! git rebase "origin/$branch"; then
+      if ! gitty_snapshot_before_rebase sync; then
+        push_output="snapshot refused (dirty/conflicted tree)"
+        push_status=1
+        rebase_conflict=true
+      elif ! git rebase "origin/$branch"; then
         git rebase --abort 2>/dev/null || true
         echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
         echo "     Refusing to force-push over the other host's commits." >&2
@@ -617,6 +729,14 @@ while true; do
         push_output="rebase conflict"
         push_status=1
         rebase_conflict=true
+      elif gitty_working_tree_has_conflict; then
+        echo "🔴 - Rebase reported clean but conflict markers detected in tree." >&2
+        echo "     Refusing to push. Snapshot branch bak/sync-* holds pre-rebase HEAD." >&2
+        push_output="rebase conflict"
+        push_status=1
+        rebase_conflict=true
+      else
+        gitty_undo_wip_snapshot
       fi
     fi
 
@@ -632,8 +752,11 @@ while true; do
       if [[ $push_status -ne 0 ]]; then
         echo "🟡 - Push rejected; re-syncing and retrying with lease guard..."
         git fetch origin "$branch" 2>/dev/null || true
-        gitty_snapshot_before_rebase sync
-        if ! git rebase "origin/$branch"; then
+        if ! gitty_snapshot_before_rebase sync; then
+          push_output="snapshot refused (dirty/conflicted tree)"
+          push_status=1
+          rebase_conflict=true
+        elif ! git rebase "origin/$branch"; then
           git rebase --abort 2>/dev/null || true
           echo "🔴 - Real conflict with remote. Resolve manually, then re-run gitty." >&2
           echo "     Refusing to force-push over the other host's commits." >&2
@@ -641,7 +764,14 @@ while true; do
           push_output="rebase conflict"
           push_status=1
           rebase_conflict=true
+        elif gitty_working_tree_has_conflict; then
+          echo "🔴 - Rebase reported clean but conflict markers detected in tree." >&2
+          echo "     Refusing to force-push. Snapshot branch bak/sync-* holds pre-rebase HEAD." >&2
+          push_output="rebase conflict"
+          push_status=1
+          rebase_conflict=true
         else
+          gitty_undo_wip_snapshot
           push_output=$(git push --force-with-lease origin "$branch" 2>&1)
           push_status=$?
         fi
