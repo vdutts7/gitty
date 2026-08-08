@@ -93,7 +93,7 @@ alt="gittysnap"
 
 - laptop + desktop both edit
 
-- rebase stops mid-flight: dirty tree, autostash gamble
+- N local commits replay against remote -> same conflict N times
 
 - other machine's work never left that machine
 
@@ -104,6 +104,39 @@ alt="gittysnap"
 - git sees one slot, two lines → conflict
 
 - nothing was edited; both lines should keep
+
+<br/>
+
+## Sync model
+
+`gitty` sync = `additive_git_integrate(origin/$branch)`. One primitive:
+
+- fetch → `git merge --no-ff <resolved-sha>` (never rebase; never rewrite local history)
+
+- conflict → try `.gitty/additive-resolvers.yaml` classes:
+  - `per_host`: `checkout --ours` + `add` for per-host artifacts (byte-authoritative on one host per commit)
+  - `semantic_union`: union + dedupe + stable-sort by `key_field` for NDJSON/JSONL ledgers
+
+- unresolvable → park on `bak/pending-merge-<utc>` + `remote-snapshot/<utc>`; branch untouched; nothing lost; non-fatal exit
+
+Forbidden ops: rebase, stash, amend, force-push, reset --hard, switch branches.
+
+### Config: `.gitty/additive-resolvers.yaml`
+
+```yaml
+per_host:
+  paths:
+    - registry/system-resource/manifest.json
+  globs:
+    - snapshots/$(hostname)/**
+semantic_union:
+  globs:
+    - "**/*.ndjson"
+    - "**/*.jsonl"
+  key_field: ts
+```
+
+Missing file → empty allowlist → resolvers never fire → conflicts park.
 
 <br/>
 
@@ -151,11 +184,12 @@ Partial holdback default on (`GITTY_PARTIAL=1`). Force bulldoze: `GITTY_FORCE=1`
 
 | problem | fix | stability | why |
 |---|---|---|---|
-| rebase strands worktree | `gittysnap` | stable | snap before integrate |
-| `--autostash` half-applies | `gitty` uses `bak/*` snapshot refs | stable | stash is not a recoverable ref |
-| `.ndjson` append conflict | `gittyunion install` | stable | driver in `.git/config` (not cloned) |
-| fresh clone drops union | re-run `gitty` / `gittyunion install` | stable | attrs alone insufficient |
+| N-commit rebase replays same conflict N times | `gitty` uses `merge --no-ff` of resolved SHA once | stable | one merge, one conflict set |
+| per-host artifact conflicts every sync | `.gitty/additive-resolvers.yaml` `per_host` | stable | doctrine class; both parents preserved via `--no-ff` |
+| `.ndjson` append conflict | `.gitty/additive-resolvers.yaml` `semantic_union` OR `gittyunion install` | stable | union + dedupe + stable-sort |
+| fresh clone drops union driver | re-run `gitty` / `gittyunion install` | stable | attrs alone insufficient |
 | oversized path blocks push | leave `GITTY_PARTIAL=1` | stable | hold back; push the rest |
+| unresolvable conflict | parked on `bak/pending-merge-*` | stable | first-class ref; nothing lost; non-fatal |
 
 <br/>
 

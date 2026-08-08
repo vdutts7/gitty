@@ -47,89 +47,11 @@ gitty_read_staged_paths() {
 
 gitty_refresh_staged_snapshot() { gitty_read_staged_paths; }
 
-# ---------- Conflict + rebase-state guards ----------
-# Root cause of the class of bugs this guards against:
-#   `git rebase --autostash` can rebase the branch cleanly (rc=0) yet leave
-#   conflict markers in the working tree when the autostash reapply hits
-#   a conflict. A naive `git add -A` after "rebase clean" then STAGES those
-#   markers and drives them into a commit — the pre-commit JSON hook is the
-#   only thing that stops corruption. Same class: pre-existing unmerged
-#   entries from an aborted merge, an in-progress rebase from a prior crash,
-#   a WIP snapshot commit that a hook silently rejected, etc.
-# Defense: byte-level detection at every gate, not exit-code trust.
-
-# Drip-through: extract conflicting paths from a failed rebase, hold them back,
-# re-commit+push the rest. Returns 0 if partial push succeeded, 1 if all paths conflict.
-gitty_drip_through_conflict() {
-  local msg="$1"
-  local -a conflict_paths=()
-  local cp
-
-  # Grab unmerged paths before aborting
-  while IFS= read -r cp; do
-    [[ -n "$cp" ]] && conflict_paths+=("$cp")
-  done < <(git diff --name-only --diff-filter=U 2>/dev/null; git ls-files -u 2>/dev/null | awk '{print $4}' | sort -u)
-  # Deduplicate
-  typeset -aU conflict_paths=("${conflict_paths[@]}")
-
-  git rebase --abort 2>/dev/null || true
-
-  if [[ ${#conflict_paths[@]} -eq 0 || "${GITTY_PARTIAL:-1}" == "0" ]]; then
-    return 1
-  fi
-
-  for cp in "${conflict_paths[@]}"; do
-    gitty_record_held "$cp" "rebase conflict with remote"
-  done
-
-  # Soft-reset our commit so we can re-stage without conflict paths
-  if [[ "$committed" == true ]]; then
-    git reset --soft HEAD~1 2>/dev/null || true
-    committed=false
-  fi
-
-  # Re-stage everything except conflict paths
-  git add -A 2>/dev/null || true
-  for cp in "${conflict_paths[@]}"; do
-    "${GITTY_GIT[@]}" reset HEAD -- "$cp" 2>/dev/null || true
-  done
-  gitty_refresh_staged_snapshot
-
-  if git diff --cached --quiet 2>/dev/null; then
-    echo "🔴 - ${#conflict_paths[@]} path(s) conflict with remote — nothing else to push." >&2
-    echo "     Resolve, then re-run gitty. Snapshot: bak/sync-*" >&2
-    return 1
-  fi
-
-  echo "🟡 - ${#conflict_paths[@]} path(s) held back (conflict); pushing ${#_gitty_staged_snapshot[@]} clean path(s)..."
-
-  # Commit the non-conflicting subset
-  echo "🟡 - Recommitting non-conflicting paths..."
-  unsetopt errexit
-  local drip_output
-  drip_output=$(gitty_commit_safe "$msg")
-  local drip_rc=$?
-  setopt errexit
-  if [[ $drip_rc -ne 0 ]]; then
-    echo "🔴 - Failed to recommit drip-through subset" >&2
-    return 1
-  fi
-  committed=true
-  echo "$drip_output"
-
-  # Rebase the smaller commit (no overlap with conflict paths)
-  git fetch origin "$branch" 2>/dev/null || true
-  if ! gitty_snapshot_before_rebase drip; then
-    return 1
-  fi
-  if ! git rebase "origin/$branch"; then
-    git rebase --abort 2>/dev/null || true
-    echo "🔴 - Drip-through subset still conflicts. Resolve manually." >&2
-    return 1
-  fi
-  gitty_undo_wip_snapshot
-  return 0
-}
+# ---------- Additive sync (merge-only integrate) ----------
+# Sync := additive_git_integrate(origin/$branch). One primitive replaces the
+# prior rebase + drip + autoheal + WIP-snapshot machinery. Never: rebase, stash,
+# reset --hard, amend, force-push, switch branches. Conflicts route through
+# permitted_additive_resolvers (config-driven) or park on a first-class ref.
 
 # 0 = clean, 1 = conflict/unmerged markers present
 gitty_working_tree_has_conflict() {
@@ -157,51 +79,186 @@ gitty_rebase_in_progress() {
   return 1
 }
 
-# Snapshot before rebase. NEVER --autostash: pop-conflict leaves half-applied
-# bytes with no recoverable first-class ref. A branch is a snapshot; a stash is not.
-# Contract: returns 0 iff working tree is clean AFTER snapshot (safe to rebase).
-#           returns 1 if a hook rejected the WIP commit and the tree stayed dirty.
-gitty_snapshot_before_rebase() {
-  local kind="${1:-rebase}"
+# Snapshot HEAD onto a first-class ref (safe_snapshot). Durable,
+# pushable, gc-safe. NEVER git stash.
+gitty_safe_snapshot() {
+  local kind="${1:-integrate}"
   local snap="bak/${kind}-$(date -u +%Y%m%dT%H%M%SZ)"
-  _gitty_wip_snapshot_made=0
-  _gitty_wip_snapshot_subject=""
-  if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-    if gitty_working_tree_has_conflict; then
-      echo "🔴 - Refusing to snapshot: working tree has unresolved conflict markers or unmerged paths." >&2
-      echo "     Run 'git status' + 'git diff --check' and resolve before re-running gitty." >&2
-      return 1
-    fi
-    git add -A 2>/dev/null || true
-    _gitty_wip_snapshot_subject="wip: gitty ${kind} snapshot"
-    if git commit --no-verify -m "$_gitty_wip_snapshot_subject" >/dev/null 2>&1; then
-      _gitty_wip_snapshot_made=1
-    fi
-    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-      echo "🔴 - WIP snapshot commit did not take (hook or index refused); working tree still dirty." >&2
-      echo "     Refusing to rebase — would either abort or attempt --autostash class of failure." >&2
-      return 1
-    fi
-  fi
   git branch "$snap" HEAD 2>/dev/null || true
-  echo "🟡 - Snapshot ref: $snap (recoverable if rebase conflicts)"
+  echo "🟡 - Safe snapshot: $snap"
+}
+
+# Load $ROOT/.gitty/additive-resolvers.yaml (tolerant, zsh-native line parser).
+typeset -a _gitty_resolver_per_host_paths=()
+typeset -a _gitty_resolver_per_host_globs=()
+typeset -a _gitty_resolver_union_globs=()
+typeset _gitty_resolver_union_key="ts"
+
+gitty_load_additive_resolvers() {
+  _gitty_resolver_per_host_paths=()
+  _gitty_resolver_per_host_globs=()
+  _gitty_resolver_union_globs=()
+  _gitty_resolver_union_key="ts"
+  local cfg="${1:-.gitty/additive-resolvers.yaml}"
+  [[ -f "$cfg" ]] || return 0
+  local section="" sublist="" line val
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// }" ]] && continue
+    if [[ "$line" == per_host:* ]]; then section="per_host"; sublist=""; continue; fi
+    if [[ "$line" == semantic_union:* ]]; then section="union"; sublist=""; continue; fi
+    if [[ "$line" =~ ^[[:space:]]+paths:[[:space:]]*$ ]]; then sublist="paths"; continue; fi
+    if [[ "$line" =~ ^[[:space:]]+globs:[[:space:]]*$ ]]; then sublist="globs"; continue; fi
+    if [[ "$line" =~ ^[[:space:]]+key_field:[[:space:]]* ]]; then
+      val="${line#*key_field:}"; val="${val//[[:space:]]/}"; val="${val//\"/}"; val="${val//\'/}"
+      _gitty_resolver_union_key="$val"
+      continue
+    fi
+    if [[ "$line" == *-\ * ]]; then
+      val="${line#*- }"; val="${val## }"; val="${val%% }"; val="${val//\"/}"; val="${val//\'/}"
+      case "$section:$sublist" in
+        per_host:paths) _gitty_resolver_per_host_paths+=("$val") ;;
+        per_host:globs) _gitty_resolver_per_host_globs+=("$val") ;;
+        union:globs)    _gitty_resolver_union_globs+=("$val") ;;
+      esac
+    fi
+  done < "$cfg"
+}
+
+gitty_match_per_host() {
+  local p="$1" entry
+  for entry in "${_gitty_resolver_per_host_paths[@]}"; do
+    [[ "$p" == "$entry" ]] && return 0
+  done
+  for entry in "${_gitty_resolver_per_host_globs[@]}"; do
+    [[ "$p" == ${~entry} ]] && return 0
+  done
+  return 1
+}
+
+gitty_match_union() {
+  local p="$1" entry
+  for entry in "${_gitty_resolver_union_globs[@]}"; do
+    [[ "$p" == ${~entry} ]] && return 0
+  done
+  return 1
+}
+
+# Apply permitted_additive_resolvers to unmerged paths in an in-flight merge.
+# per_host_byte_authoritative -> checkout --ours + add
+# semantic_union -> union + dedupe + stable-sort by key_field
+# Returns 0 iff every unmerged path resolved (index fully staged).
+gitty_apply_additive_resolvers() {
+  local audit=/tmp/gitty-resolver-audit-$$.log; : >"$audit"
+  local -a unmerged=()
+  local p ours theirs
+  while IFS= read -r p; do [[ -n "$p" ]] && unmerged+=("$p"); done \
+    < <(git diff --name-only --diff-filter=U 2>/dev/null)
+  (( ${#unmerged[@]} == 0 )) && return 0
+  local -a unresolved=()
+  for p in "${unmerged[@]}"; do
+    ours=$(git rev-parse ":2:$p" 2>/dev/null || echo -)
+    theirs=$(git rev-parse ":3:$p" 2>/dev/null || echo -)
+    if gitty_match_per_host "$p"; then
+      if git checkout --ours -- "$p" 2>/dev/null && git add -- "$p" 2>/dev/null; then
+        print -r -- "per_host_byte_authoritative $p ours=$ours theirs=$theirs" >>"$audit"
+        continue
+      fi
+      unresolved+=("$p"); continue
+    fi
+    if gitty_match_union "$p" && command -v python3 >/dev/null 2>&1; then
+      local out_blob=/tmp/gitty-out-$$.$RANDOM ours_blob=/tmp/gitty-ours-$$.$RANDOM theirs_blob=/tmp/gitty-theirs-$$.$RANDOM
+      git show ":2:$p" >"$ours_blob" 2>/dev/null || : >"$ours_blob"
+      git show ":3:$p" >"$theirs_blob" 2>/dev/null || : >"$theirs_blob"
+      if python3 - "$_gitty_resolver_union_key" "$ours_blob" "$theirs_blob" "$out_blob" <<'PYEOF'
+import json, sys
+key, ours, theirs, out = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+seen=set(); rows=[]
+for src in (ours, theirs):
+    try: fh=open(src)
+    except OSError: continue
+    for line in fh:
+        if not line.strip() or line in seen: continue
+        seen.add(line)
+        try: k=json.loads(line).get(key)
+        except Exception: k=None
+        rows.append((k if k is not None else "", len(rows), line))
+rows.sort(key=lambda r:(str(r[0]), r[1]))
+with open(out,"w") as f:
+    for _,_,line in rows: f.write(line if line.endswith("\n") else line+"\n")
+PYEOF
+      then
+        mv "$out_blob" "$p" 2>/dev/null && git add -- "$p" 2>/dev/null
+        rm -f "$ours_blob" "$theirs_blob"
+        print -r -- "semantic_union $p ours=$ours theirs=$theirs key=$_gitty_resolver_union_key" >>"$audit"
+        continue
+      fi
+      rm -f "$out_blob" "$ours_blob" "$theirs_blob"
+    fi
+    unresolved+=("$p")
+  done
+  if (( ${#unresolved[@]} > 0 )); then
+    for p in "${unresolved[@]}"; do
+      gitty_record_held "$p" "unresolved conflict (no matching additive resolver)"
+    done
+    return 1
+  fi
   return 0
 }
 
-# After a successful rebase, if we injected a WIP snapshot commit at the tip,
-# unwind it so the user's real commit message becomes the visible commit.
-# Contract: leaves working tree matching pre-WIP state (indexed + unindexed
-# changes restored) OR no-ops if we never made a WIP commit.
-gitty_undo_wip_snapshot() {
-  [[ "${_gitty_wip_snapshot_made:-0}" == "1" ]] || return 0
-  local tip_subject
-  tip_subject=$(git log -1 --pretty=%s 2>/dev/null || true)
-  if [[ "$tip_subject" == "$_gitty_wip_snapshot_subject" ]]; then
-    git reset --soft HEAD~1 >/dev/null 2>&1 || true
-    git reset HEAD -- . >/dev/null 2>&1 || true
+# Park an unresolvable conflict on first-class refs, abort the merge, and
+# return the branch untouched. NEVER stash. Zero data loss, non-fatal.
+gitty_park_conflict() {
+  local target_sha="$1"
+  git merge --abort 2>/dev/null || true
+  local ts snap_local snap_remote
+  ts=$(date -u +%Y%m%dT%H%M%SZ)
+  snap_local="bak/pending-merge-$ts"
+  snap_remote="remote-snapshot/$ts"
+  git branch "$snap_local" HEAD 2>/dev/null || true
+  git branch "$snap_remote" "$target_sha" 2>/dev/null || true
+  git push origin "$snap_local" "$snap_remote" 2>/dev/null || true
+  echo "🟡 - Conflict parked: $snap_local (local HEAD) + $snap_remote ($target_sha)"
+  echo "     Resolve manually; local branch untouched; nothing lost."
+}
+
+# additive_git_integrate: doctrinal sync of origin/$branch into HEAD.
+# Returns 0 = merged (or already present), 1 = parked/stopped.
+gitty_additive_integrate() {
+  local branch="$1" msg="$2"
+  local target_ref="origin/$branch"
+  local target_sha head_before head_after base
+  target_sha=$(git rev-parse --verify "${target_ref}^{commit}" 2>/dev/null) || return 0
+  head_before=$(git rev-parse HEAD 2>/dev/null)
+  if git merge-base --is-ancestor "$target_sha" HEAD 2>/dev/null; then
+    return 0
   fi
-  _gitty_wip_snapshot_made=0
-  _gitty_wip_snapshot_subject=""
+  gitty_load_additive_resolvers "$root_dir/.gitty/additive-resolvers.yaml"
+  gitty_safe_snapshot "pre-integrate"
+  local merge_rc
+  git merge --no-ff --no-edit "$target_sha" >/dev/null 2>&1
+  merge_rc=$?
+  if (( merge_rc == 0 )); then
+    head_after=$(git rev-parse HEAD 2>/dev/null)
+    echo "🟢 - Additive integrate: merged $target_ref ($target_sha) [$head_before -> $head_after]"
+    return 0
+  fi
+  if gitty_apply_additive_resolvers; then
+    local audit_body
+    audit_body=$(cat /tmp/gitty-resolver-audit-$$.log 2>/dev/null || true)
+    if git commit --no-edit -m "$msg
+
+additive-git: permitted_additive_resolvers
+$audit_body" >/dev/null 2>&1; then
+      head_after=$(git rev-parse HEAD 2>/dev/null)
+      echo "🟢 - Additive integrate: merged via resolvers [$head_before -> $head_after]"
+      rm -f /tmp/gitty-resolver-audit-$$.log
+      return 0
+    fi
+  fi
+  rm -f /tmp/gitty-resolver-audit-$$.log
+  gitty_park_conflict "$target_sha"
+  return 1
 }
 
 gitty_path_canonical() {
@@ -704,30 +761,20 @@ else
      && echo "$commit_output" | grep -qE 'Stale-base guard'; then
     _gitty_stale_base_healed=1
     branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    echo "🟡 - Stale-base guard fired; fetching + rebasing onto origin/$branch (additive autoheal, snapshot-branch)..."
+    echo "🟡 - Stale-base guard fired; additive-integrating origin/$branch..."
     git fetch origin "$branch" 2>/dev/null || git fetch origin 2>/dev/null || true
-    if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
-      if ! gitty_snapshot_before_rebase autoheal; then
-        echo "🔴 - Autoheal aborted before rebase (see snapshot error above)." >&2
+    unsetopt errexit
+    gitty_additive_integrate "$branch" "$commit_mssg"
+    ai_rc=$?
+    setopt errexit
+    if (( ai_rc == 0 )); then
+      echo "🟢 - Autoheal integrate clean; re-staging and retrying commit..."
+      git add -A || true
+      if gitty_working_tree_has_conflict; then
+        echo "🔴 - Conflict markers appeared during re-stage; aborting autoheal." >&2
+        git reset -q HEAD -- . 2>/dev/null || true
+        committed=false
       else
-      unsetopt errexit
-      git rebase "origin/$branch"
-      rebase_rc=$?
-      setopt errexit
-      if [[ $rebase_rc -eq 0 ]] && gitty_working_tree_has_conflict; then
-        rebase_rc=99
-        echo "🔴 - Rebase reported clean but conflict markers detected in tree (autostash-class residue)." >&2
-        echo "     Refusing to stage. Snapshot branch bak/autoheal-* holds pre-rebase HEAD." >&2
-      fi
-      if [[ $rebase_rc -eq 0 ]]; then
-        gitty_undo_wip_snapshot
-        echo "🟢 - Rebase clean; re-staging and retrying commit..."
-        git add -A || true
-        if gitty_working_tree_has_conflict; then
-          echo "🔴 - Conflict markers appeared during re-stage; aborting autoheal." >&2
-          git reset -q HEAD -- . 2>/dev/null || true
-          committed=false
-        else
         gitty_refresh_staged_snapshot
         gitty_holdback_offenders
         unsetopt errexit
@@ -738,19 +785,12 @@ else
           committed=true
           echo "$commit_output"
           gitty_report_hooks pre-commit "$commit_output" 0
-          echo "🟢 - Autohealed stale-base: rebased onto origin/$branch"
-        fi
-        fi
-      else
-        if gitty_drip_through_conflict "$commit_mssg"; then
-          echo "🟢 - Partial autoheal: non-conflicting paths committed"
-        else
-          echo "🔴 - Rebase conflicted during stale-base autoheal: real ledger collision." >&2
-          echo "     Resolve manually; do not auto-pick sides on shared JSON ledgers." >&2
-          echo "     Snapshot branch bak/autoheal-* still points at pre-rebase HEAD." >&2
+          echo "🟢 - Autohealed stale-base via additive integrate"
         fi
       fi
-      fi
+    else
+      echo "🔴 - Additive integrate parked; local branch untouched." >&2
+      echo "     See bak/pending-merge-*  +  remote-snapshot/*  for both sides." >&2
     fi
   fi
 
@@ -772,6 +812,7 @@ push_attempt=0
 push_max=${GITTY_PUSH_RETRIES:-8}
 
 # ---------- Safe additive sync (multi-host aware) ----------
+# Sync = additive_git_integrate(origin/$branch) + push. Merge-only; never rebase.
 # Escape hatch: GITTY_FORCE=1 restores the old bulldoze behavior for solo repos.
 while true; do
   unsetopt errexit
@@ -790,33 +831,18 @@ while true; do
     echo "🟡 - Fetching remote..."
     git fetch origin "$branch" 2>/dev/null || git fetch origin 2>/dev/null || true
 
-    rebase_conflict=false
+    integrate_parked=false
     if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
-      echo "🟡 - Rebasing onto origin/$branch (additive sync)..."
-      if ! gitty_snapshot_before_rebase sync; then
-        push_output="snapshot refused (dirty/conflicted tree)"
+      echo "🟡 - Additive-integrating origin/$branch..."
+      gitty_additive_integrate "$branch" "$commit_mssg"
+      if (( $? != 0 )); then
+        push_output="integrate parked"
         push_status=1
-        rebase_conflict=true
-      elif ! git rebase "origin/$branch"; then
-        if gitty_drip_through_conflict "$commit_mssg"; then
-          :
-        else
-          push_output="rebase conflict"
-          push_status=1
-          rebase_conflict=true
-        fi
-      elif gitty_working_tree_has_conflict; then
-        echo "🔴 - Rebase reported clean but conflict markers detected in tree." >&2
-        echo "     Refusing to push. Snapshot branch bak/sync-* holds pre-rebase HEAD." >&2
-        push_output="rebase conflict"
-        push_status=1
-        rebase_conflict=true
-      else
-        gitty_undo_wip_snapshot
+        integrate_parked=true
       fi
     fi
 
-    if [[ "$rebase_conflict" != true ]]; then
+    if [[ "$integrate_parked" != true ]]; then
       echo "🟡 - Pushing to remote..."
       if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
         push_output=$(git push origin "$branch" 2>&1)
@@ -826,30 +852,15 @@ while true; do
       push_status=$?
 
       if [[ $push_status -ne 0 ]]; then
-        echo "🟡 - Push rejected; re-syncing and retrying with lease guard..."
+        echo "🟡 - Push rejected; re-integrating and retrying..."
         git fetch origin "$branch" 2>/dev/null || true
-        if ! gitty_snapshot_before_rebase sync; then
-          push_output="snapshot refused (dirty/conflicted tree)"
+        gitty_additive_integrate "$branch" "$commit_mssg"
+        if (( $? != 0 )); then
+          push_output="integrate parked"
           push_status=1
-          rebase_conflict=true
-        elif ! git rebase "origin/$branch"; then
-          if gitty_drip_through_conflict "$commit_mssg"; then
-            push_output=$(git push --force-with-lease origin "$branch" 2>&1)
-            push_status=$?
-          else
-            push_output="rebase conflict"
-            push_status=1
-            rebase_conflict=true
-          fi
-        elif gitty_working_tree_has_conflict; then
-          echo "🔴 - Rebase reported clean but conflict markers detected in tree." >&2
-          echo "     Refusing to force-push. Snapshot branch bak/sync-* holds pre-rebase HEAD." >&2
-          push_output="rebase conflict"
-          push_status=1
-          rebase_conflict=true
+          integrate_parked=true
         else
-          gitty_undo_wip_snapshot
-          push_output=$(git push --force-with-lease origin "$branch" 2>&1)
+          push_output=$(git push origin "$branch" 2>&1)
           push_status=$?
         fi
       fi
@@ -858,14 +869,9 @@ while true; do
 
   setopt errexit
 
-  if [[ "${rebase_conflict:-false}" == true ]]; then
-    if [[ ${#gitty_held_paths[@]} -gt 0 && "$committed" == true ]]; then
-      # Partial drip-through succeeded — don't exit, fall through to push
-      :
-    else
-      cd "$original_dir"
-      exit 1
-    fi
+  if [[ "${integrate_parked:-false}" == true ]]; then
+    cd "$original_dir"
+    exit 0   # parked = non-fatal; branch untouched; nothing lost
   fi
 
   if [[ $push_status -eq 0 ]]; then
