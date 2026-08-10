@@ -233,6 +233,13 @@ gitty_additive_integrate() {
   if git merge-base --is-ancestor "$target_sha" HEAD 2>/dev/null; then
     return 0
   fi
+  # Prefer ff-only: no merge commit, preserves dirty index (disjoint files),
+  # and matches the stale-base hook's own prescribed fix.
+  if git merge --ff-only --no-edit "$target_sha" >/dev/null 2>&1; then
+    head_after=$(git rev-parse HEAD 2>/dev/null)
+    echo "🟢 - Additive integrate (ff): $target_ref ($target_sha) [$head_before -> $head_after]"
+    return 0
+  fi
   gitty_load_additive_resolvers "$root_dir/.gitty/additive-resolvers.yaml"
   gitty_safe_snapshot "pre-integrate"
   local merge_rc
