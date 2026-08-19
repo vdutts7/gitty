@@ -1,8 +1,10 @@
-# Partial commit (+ push)
+# Partial commit (+ drip)
 
-- `gitty` tries to commit + push **as much as possible**
-  - paths that would block remote are held back locally; everything else goes through.
-- built into `gitty` itself- not repo `pre-commit`/`pre-push` hooks
+`gitty` is a backup machine: commit + push **as much as possible**, every run.
+
+- paths that would block remote are held back locally; everything else goes through
+- built into `gitty` itself (not repo `pre-commit`/`pre-push` hooks)
+- drip-through on additive integrate: if resolvers clear some conflict paths and not others, commit the resolved subset; hold unresolved; do not park the whole merge (`GITTY_PARTIAL=1` default)
 
 ## Flow
 
@@ -67,7 +69,16 @@ tests/partial-commit.smoke.sh
 
 Expects: `huge.bin` held back (🔴), `ok.txt` + `fine.txt` pushed (🟢), partial success dashboard
 
-## Disable partial mode
+## Integrate drip
+
+On `additive_git_integrate` conflict:
+
+1. run `.gitty/additive-resolvers.yaml` classes
+2. if **all** conflict paths resolve → commit the merge
+3. if **some** resolve (`GITTY_PARTIAL=1`) → commit the resolved subset; hold the rest; report at end of run
+4. if **none** can land → park on `bak/pending-merge-*` (existing behavior)
+
+## Disable partial / drip
 
 Old all-or-nothing behavior:
 

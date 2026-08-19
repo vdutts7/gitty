@@ -10,8 +10,8 @@
 <div align="center">
 
 <h1 align="center">gitty</h1>
-<p align="center"><i><b>snapshot checkpoint: one command</b></i></p>
-<p align="center"><i><b>content first, clean history second</b></i></p>
+<p align="center"><i><b>diligent backup machine: one command</b></i></p>
+<p align="center"><i><b>land everything that can land, every run</b></i></p>
 
 [![GitHub][github-badge]][github-url]
 [![npm][npm]][npm-url]
@@ -97,6 +97,14 @@ alt="gittysnap"
 
 - other machine's work never left that machine
 
+### ❌ All-or-nothing stall
+
+- one conflicted / oversized / submodule path parks the whole checkpoint
+
+- the rest of the tree sits unbacked on that machine
+
+- drip: push the clean subset; hold the rest; never stall the backup
+
 ### ❌ Append ledger false conflicts
 
 - two hosts append different `.ndjson` / `.jsonl` lines
@@ -109,15 +117,19 @@ alt="gittysnap"
 
 ## Sync model
 
-`gitty` sync = `additive_git_integrate(origin/$branch)`. One primitive:
+`gitty` is a backup machine. Job: get as much of the tree onto remote as possible, every run.
 
-- fetch → `git merge --no-ff <resolved-sha>` (never rebase; never rewrite local history)
+Sync = `additive_git_integrate(origin/$branch)`. One primitive:
+
+- fetch → prefer `merge --ff-only`; else `merge --no-ff <resolved-sha>` (never rebase; never rewrite local history)
 
 - conflict → try `.gitty/additive-resolvers.yaml` classes:
   - `per_host`: `checkout --ours` + `add` for per-host artifacts (byte-authoritative on one host per commit)
   - `semantic_union`: union + dedupe + stable-sort by `key_field` for NDJSON/JSONL ledgers
 
-- unresolvable → park on `bak/pending-merge-<utc>` + `remote-snapshot/<utc>`; branch untouched; nothing lost; non-fatal exit
+- drip (`GITTY_PARTIAL=1` default): some paths resolve, some do not → commit the resolved subset; hold unresolved; keep backing up
+
+- park only when nothing can land: `bak/pending-merge-<utc>` + `remote-snapshot/<utc>`; branch untouched; nothing lost; non-fatal exit
 
 Forbidden ops: rebase, stash, amend, force-push, reset --hard, switch branches.
 
@@ -144,7 +156,7 @@ Missing file → empty allowlist → resolvers never fire → conflicts park.
 
 | | Bin | Job | When |
 |---|---|---|---|
-| ![gitty][i-gitty] | `gitty` | holdback → commit → push | default checkpoint |
+| ![gitty][i-gitty] | `gitty` | drip + holdback → commit → push | default checkpoint |
 | ![lfs][i-lfs] | `gittylfs` | same + LFS track | big binaries |
 | ![git][i-git] | `gittyembedded` | submodules then parent | dirty nested repos |
 | ![health][i-health] | `gittyhealth` | report only | inspect / mid-op |
@@ -176,7 +188,7 @@ gittyunion install
 gitty [commit_mssg] [root_dir]
 ```
 
-Partial holdback default on (`GITTY_PARTIAL=1`). Force bulldoze: `GITTY_FORCE=1`.
+Drip + holdback default on (`GITTY_PARTIAL=1`): commit/push whatever can land; hold the rest. Force bulldoze: `GITTY_FORCE=1`. Park-only (no drip): `GITTY_PARTIAL=0`.
 
 <br/>
 
@@ -189,7 +201,8 @@ Partial holdback default on (`GITTY_PARTIAL=1`). Force bulldoze: `GITTY_FORCE=1`
 | `.ndjson` append conflict | `.gitty/additive-resolvers.yaml` `semantic_union` OR `gittyunion install` | stable | union + dedupe + stable-sort |
 | fresh clone drops union driver | re-run `gitty` / `gittyunion install` | stable | attrs alone insufficient |
 | oversized path blocks push | leave `GITTY_PARTIAL=1` | stable | hold back; push the rest |
-| unresolvable conflict | parked on `bak/pending-merge-*` | stable | first-class ref; nothing lost; non-fatal |
+| one unresolvable file parks whole merge | drip-through: commit resolved subset; hold the rest | stable | backup as much as possible |
+| nothing can land | parked on `bak/pending-merge-*` | stable | first-class ref; nothing lost; non-fatal |
 
 <br/>
 

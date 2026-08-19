@@ -7,7 +7,7 @@
 | [commands.md](commands.md) | all bins |
 | [gittysnap.md](gittysnap.md) | snapshot-first multi-machine sync |
 | [gittyunion.md](gittyunion.md) | NDJSON/JSONL union merge driver |
-| [partial-commit.md](partial-commit.md) | hold back offenders |
+| [partial-commit.md](partial-commit.md) | holdback + drip-through |
 | [environment.md](environment.md) | env vars |
 | [hooks.md](hooks.md) | `.hooks/` vs npm-only |
 
