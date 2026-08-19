@@ -74,3 +74,743 @@ _plans/
 ### npm pack artifacts
 *.tgz
 
+# =============================================================================
+# ----------GLOBAL / GENERAL (OS)----------------------------------------------
+# =============================================================================
+# OS Files
+.DS_Store?
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Icon?
+Desktop.ini
+# =============================================================================
+# ----------EXCLUSION CLUSTERS (pattern_archetypes)-----------------------------
+# Exclusion clusters - one archetype per category (GI-017).
+# Register category in registry FIRST, then mirror here. One archetype per category (GI-017).
+# =============================================================================
+# =============================================================================
+# ----------virtualenv | substring_dir | token: venv -----------------------------
+# =============================================================================
+*venv*/
+ENV/
+# =============================================================================
+# ----------logs | exact_dir ---------------------------------------------------
+# =============================================================================
+# =============================================================================
+# ----------log_files | basename_glob ------------------------------------------
+# =============================================================================
+# =============================================================================
+# ----------node_modules | exact_dir -------------------------------------------
+# =============================================================================
+jspm_packages/
+bower_components/
+# =============================================================================
+# ----------node_ecosystem_dirs | exact_dir ------------------------------------
+# =============================================================================
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+# =============================================================================
+# ----------node_ecosystem_files | basename_glob -------------------------------
+# =============================================================================
+.npm
+.eslintcache
+.node_repl_history
+.lock-wscript
+.grunt
+.yarn-integrity
+*.tsbuildinfo
+# =============================================================================
+# ----------python_cache | exact_dir -------------------------------------------
+# =============================================================================
+# =============================================================================
+# ----------python_artifacts | basename_glob -----------------------------------
+# =============================================================================
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+.Python
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+# =============================================================================
+# ----------build_artifacts | exact_dir ----------------------------------------
+# =============================================================================
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+out/
+.storybook-out/
+# =============================================================================
+# ----------secrets | basename_glob --------------------------------------------
+# =============================================================================
+.env.test
+.env.production
+.env.local
+.env.development
+.env.backup
+.env.*.local
+.env.development.local
+.env.production.local
+.env.test.local
+# =============================================================================
+# ----------cache | exact_dir --------------------------------------------------
+# =============================================================================
+.webassets-cache/
+# =============================================================================
+# ----------coverage_dirs | exact_dir ------------------------------------------
+# =============================================================================
+.tox/
+.hypothesis/
+.pytest_cache/
+# =============================================================================
+# ----------coverage_files | basename_glob -------------------------------------
+# =============================================================================
+*.lcov
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+.phpunit.result.cache
+# =============================================================================
+# ----------tmp | exact_dir ----------------------------------------------------
+# =============================================================================
+tmp/
+temp/
+# =============================================================================
+# ----------temp_editor | basename_glob ----------------------------------------
+# =============================================================================
+*.tmp
+*.temp
+*.swo
+# =============================================================================
+# ----------runtime_data | basename_glob ---------------------------------------
+# =============================================================================
+pids
+*.pid
+*.seed
+*.pid.lock
+# =============================================================================
+# ----------ide_dirs | exact_dir -------------------------------------------------
+# =============================================================================
+extensions/
+.settings/
+/nbproject/private/
+/nbbuild/
+/nbdist/
+/.nb-gradle/
+# =============================================================================
+# ----------ide_files | basename_glob --------------------------------------------
+# =============================================================================
+*.code-workspace
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.cproject
+*.sublime-project
+*.sublime-workspace
+# =============================================================================
+# ----------certs | basename_glob ----------------------------------------------
+# =============================================================================
+*.pem
+*.key
+*.crt
+*.csr
+# =============================================================================
+# ----------mcp | basename_glob ------------------------------------------------
+# =============================================================================
+mcp.json
+# =============================================================================
+# ----------agentic | exact_dir --------------------------------------------------
+# =============================================================================
+.cursor/
+.codeium/
+.windsurf/
+.gemini/
+.antigravity/
+.agy/
+.kiro/
+.qoder/
+.claude/
+.warp/
+.codex/
+.void-editor/
+.amazonq/
+.roo/
+.superset/
+.goose/
+.augment/
+.junie/
+.qodo/
+.zencoder/
+# =============================================================================
+# ----------agentic_globs | basename_glob --------------------------------------
+# =============================================================================
+# =============================================================================
+# ----------archive_files | basename_glob | family: archives ---------------------
+# =============================================================================
+*.zip
+*.tar
+*.gz
+*.bz2
+*.tbz
+*.tbz2
+*.xz
+*.txz
+*.7z
+*.rar
+*.zst
+*.zstd
+*.lz
+*.lzma
+*.cab
+*.dmg
+*.iso
+*.img
+*.jar
+*.war
+*.ear
+*.apk
+*.ipa
+*.deb
+*.rpm
+*.crx
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+# =============================================================================
+# ----------backup_artifacts | basename_glob | family: backups -----------------
+# =============================================================================
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+# =============================================================================
+# ----------cloud_platform | exact_dir -----------------------------------------
+# =============================================================================
+.aws/
+.azure/
+.terraform/
+.vagrant/
+# =============================================================================
+# ----------terraform | basename_glob ------------------------------------------
+# =============================================================================
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# =============================================================================
+# ----------databases | basename_glob ------------------------------------------
+# =============================================================================
+*.bson
+*.myd
+*.myi
+*.dump
+*.rdb
+*.aof
+*.db
+*.sqlite
+*.sqlite3
+db.sqlite3
+db.sqlite3-journal
+# =============================================================================
+# ----------config_examples | negation_stack -----------------------------------
+# =============================================================================
+!config.example.json
+!config.example.yml
+!config.example.yaml
+# =============================================================================
+# ----------kubernetes | basename_glob -----------------------------------------
+# =============================================================================
+*.kubeconfig
+# =============================================================================
+# ----------rails_artifacts | negation_stack -----------------------------------
+# =============================================================================
+/db/*.sqlite3
+/db/*.sqlite3-*
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+# =============================================================================
+# ----------symfony_var | negation_stack ---------------------------------------
+# =============================================================================
+/var/cache/*
+/var/logs/*
+/var/sessions/*
+!var/cache/.gitkeep
+!var/logs/.gitkeep
+!var/sessions/.gitkeep
+# =============================================================================
+# ----------MISC---------------------------------------
+# =============================================================================
+.wrangler
+.wrangler/*
+# GLOBAL / GENERAL
+  
+# Temp files
+# Log files
+# Runtime data
+  
+# Coverage directory used by tools like istanbul
+  
+# nyc test coverage
+.nyc_output
+  
+# Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
+  
+# Bower dependency directory (https://bower.io/)
+bower_components
+  
+# node-waf configuration
+  
+# Compiled binary addons (https://nodejs.org/api/addons.html)
+build/Release
+  
+# Dependency directories
+  
+# TypeScript cache
+  
+# Optional npm cache directory
+  
+# Optional eslint cache
+  
+# Microbundle cache
+  
+# Optional REPL history
+  
+# Output of 'npm pack'
+  
+# Yarn Integrity file
+  
+# dotenv environment variables file
+  
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+  
+# Next.js build output
+.next
+  
+# Nuxt.js build / generate output
+.nuxt
+dist
+  
+# Gatsby files
+  
+# Storybook build outputs
+.out
+.storybook-out
+  
+# Temporary folders
+  
+# Editor directories and files
+  
+# PROGRAMMING LANGUAGES
+  
+# ActionScript
+*.as
+*.swf
+*.swc
+  
+# Ada
+*.ads
+*.adb
+*.ali
+  
+# Assembly
+*.asm
+*.s
+  
+# C
+*.a
+*.dylib
+*.su
+*.idb
+*.pdb
+*.ilk
+*.meta
+  
+# C++
+*.tlog
+*.lastbuildstate
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+  
+# C#
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+  
+# Clojure
+*.class
+*.clj
+*.cljs
+*.cljc
+*.edn
+  
+# Cobol
+*.cbl
+*.cob
+*.cpy
+  
+# CoffeeScript
+*.coffee
+*.cson
+*.iced
+  
+# ColdFusion
+*.cfm
+*.cfc
+  
+# Crystal
+*.cr
+*.ecr
+*.slang
+  
+# Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+  
+# Elixir
+/_build/
+/deps/
+*.ez
+*.beam
+  
+# Elm
+elm-stuff/
+.repl
+  
+# Erlang
+*.beam
+*.app
+.eunit/
+deps/
+rel/
+  
+# Fortran
+*.mod
+*.smod
+  
+# Go
+*.exe
+*.exe~
+*.dll
+*.dylib
+*.test
+*.out
+go.work
+  
+# Groovy
+*.groovy
+*.gradle
+.gradle
+  
+# Haskell
+*.hi
+*.dyn_hi
+*.dyn_o
+dist-*/
+cabal-dev/
+*.cabal
+  
+# Java
+*.class
+hs_err_pid*
+replay_pid*
+  
+# JavaScript
+*.map
+*.min.js
+*.min.css
+  
+# Julia
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+deps/
+docs/build/
+Manifest.toml
+  
+# Kotlin
+*.kt
+*.kts
+  
+# Lisp
+*.elc
+*.el
+*.fasl
+*.dfsl
+*.pfsl
+*.d64fsl
+*.p64fsl
+*.lx64fsl
+*.lx32fsl
+*.dx64fsl
+*.dx32fsl
+*.fx64fsl
+*.fx32fsl
+*.sx64fsl
+*.sx32fsl
+*.ax64fsl
+*.ax32fsl
+  
+# Lua
+*.luac
+*.lua
+  
+# MATLAB
+*.asv
+*.slx.autosave
+  
+# Nim
+nimcache/
+*.nimc
+  
+# Objective-C
+*.h
+*.m
+*.mm
+  
+# OCaml
+*.cmo
+*.cmi
+*.a
+*.cmx
+*.cmxa
+*.cmxs
+  
+# Pascal
+*.dcu
+*.ppu
+*.a
+  
+# Perl
+*.pm
+*.t
+*.pl
+*.cgi
+  
+# PHP
+*.php
+*.phtml
+*.php3
+*.php4
+*.php5
+*.phps
+  
+# PowerShell
+*.ps1
+*.psm1
+*.psd1
+  
+# Prolog
+*.pl
+*.pro
+*.P
+  
+# Python
+lib/
+lib64/
+.cache
+  
+# R
+*.Rhistory
+*.RData
+*.Ruserdata
+.Rproj.user/
+  
+# Ruby
+*.gem
+.ruby-gemset
+.ruby-version
+.bundle/
+vendor/bundle/
+log/
+  
+# Rust
+target/
+  
+# Scala
+*.class
+  
+# Scheme
+*.ss
+*.scm
+*.sch
+  
+# Smalltalk
+*.st
+*.cs
+  
+# Swift
+*.swiftpm
+*.xcodeproj/
+*.xcworkspace/
+*.dSYM/
+  
+# Tcl
+*.tcl
+*.tk
+  
+# TypeScript
+  
+# Verilog
+*.v
+*.vh
+*.sv
+*.svh
+  
+# Visual Basic
+*.vb
+*.vbs
+*.vbproj
+*.vbsproj
+  
+# WebAssembly
+*.wasm
+*.wat
+  
+# FRAMEWORKS & LIBRARIES
+  
+# Angular
+.angular/
+.e2e/
+  
+# Backbone
+*.min.js
+  
+# Bootstrap
+  
+# Django
+local_settings.py
+  
+# Express
+  
+# Flask
+instance/
+.webassets-cache
+  
+# Laravel
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+  
+# Next.js
+  
+# Rails
+  
+# React
+  
+# Spring Boot
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+  
+# Symfony
+  
+# Vue
+/node_modules/
+  
+# DATABASES
+  
+# MongoDB
+  
+# MySQL
+  
+# PostgreSQL
+  
+# Redis
+# SQLite
+# TOOLS & PLATFORMS
+  
+# AWS
+  
+# Azure
+  
+  
+# Kubernetes
+  
+# Terraform
+# Vagrant
+  
+# IDE & EDITORS
+  
+# VSCode
+# JetBrains
+# Eclipse
+  
+# NetBeans
+/dist/
+# Sublime Text
+# Vim
+*~ 
+  
+# MISCELLANEOUS
+  
+# Large files
+# Backup files
+  
+# Certificates
+# Configuration files (keep examples)
+# MCP related
+# ==============================================================================
+_MCP_/
+  
+# Agentic IDEs, CLIs, etc
+  
+.superset/*
+.goose/*
+.augment/*
+.junie/*
+.qodo/*
+.zencoder/*
+// TODO: add more + each one's respective ignore file
+    
+# Workflows
+  
+TIMELINE.json
+!templates/TIMELINE.template.json
+FINDINGS.json
+!templates/FINDINGS.template.json
+promptpad.md
+!templates/promptpad.template.md
+TODOs.md
+!templates/TODOs.template.md
