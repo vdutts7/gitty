@@ -1,6 +1,6 @@
 <p align="center">
   <img
-    src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787105462"
+    src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787107583"
     alt="gitty icon"
     width="80"
     height="80"
@@ -35,7 +35,7 @@
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787105462"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583"
 width="40"
 height="40"
 alt="git"
@@ -56,7 +56,7 @@ alt="git"
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787105462"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583"
 width="40"
 height="40"
 alt="rebase"
@@ -77,7 +77,7 @@ alt="rebase"
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787105462"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787107583"
 width="40"
 height="40"
 alt="gitty"
@@ -150,12 +150,12 @@ flowchart LR
 
 | | Bin | Job | When |
 |---|---|---|---|
-| ![gitty][i-gitty] | `gitty` | drip + holdback -> commit -> push | default backup |
-| ![lfs][i-lfs] | `gittylfs` | same + LFS track | big binaries |
-| ![git][i-git] | `gittyembedded` | submodules then parent | dirty nested repos |
-| ![health][i-health] | `gittyhealth` | report only | inspect / mid-op |
-| ![snap][i-snap] | `gittysnap` | snap -> merge -> abort clean | solo multi-machine |
-| ![union][i-json] | `gittyunion` | NDJSON union driver | append ledgers |
+| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787107583" width="40" height="40" alt="gitty" /> | `gitty` | drip + holdback -> commit -> push | default backup |
+| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git-lfs.webp?v=1787107583" width="40" height="40" alt="lfs" /> | `gittylfs` | same + LFS track | big binaries |
+| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583" width="40" height="40" alt="git" /> | `gittyembedded` | submodules then parent | dirty nested repos |
+| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/infomaniak-kcheck.webp?v=1787107583" width="40" height="40" alt="health" /> | `gittyhealth` | report only | inspect / mid-op |
+| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/borg-backup.webp?v=1787107583" width="40" height="40" alt="snap" /> | `gittysnap` | snap -> merge -> abort clean | solo multi-machine |
+| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/json.webp?v=1787107583" width="40" height="40" alt="union" /> | `gittyunion` | NDJSON union driver | append ledgers |
 
 Separate bins. Same package. Plain `gitty` != `gittysnap`.
 
@@ -255,17 +255,11 @@ npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 
 ## Contact
 
-<a href="https://vd7.io"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1787105462" alt="vd7.io" height="40" /></a>
+<a href="https://vd7.io"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1787107583" alt="vd7.io" height="40" /></a>
 &nbsp;
-<a href="https://x.com/vdutts7"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1787105462" alt="/vdutts7" height="40" /></a>
+<a href="https://x.com/vdutts7"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1787107583" alt="/vdutts7" height="40" /></a>
 
 [github-badge]: https://img.shields.io/badge/gitty-000000?style=for-the-badge&logo=github&logoColor=white
 [github-url]: https://github.com/vdutts7/gitty
 [npm]: https://img.shields.io/badge/npm-@vd7/gitty-CB3837?style=for-the-badge&logo=npm
 [npm-url]: https://www.npmjs.com/package/@vd7/gitty
-[i-git]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp
-[i-gitty]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp
-[i-lfs]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git-lfs.webp
-[i-health]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/infomaniak-kcheck.webp
-[i-snap]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/borg-backup.webp
-[i-json]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/json.webp

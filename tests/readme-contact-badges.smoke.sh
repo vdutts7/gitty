@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# README Contact social badges: HTML <img height="40"> only (DR-011)
+# README images: Contact height=40 (DR-011) + table icons width/height 40 (DR-012)
 setopt errexit pipefail nounset
 
 typeset -r REPO_ROOT="${0:A:h:h}"
@@ -27,4 +27,11 @@ if missing:
     print("🔴 README Contact missing", missing, file=sys.stderr)
     sys.exit(1)
 print("🟢 README Contact social badges HTML height=40")
+if re.search(r"^\|.*!\[[^\]]*\]", text, re.M):
+    print("🔴 README table icon column: markdown images forbidden; use HTML <img width=\"40\" height=\"40\">", file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'<img [^>]*width="40"[^>]*height="40"', text):
+    print("🔴 README missing table icon HTML width=40 height=40", file=sys.stderr)
+    sys.exit(1)
+print("🟢 README table icons HTML width=40 height=40")
 PY
