@@ -1,6 +1,6 @@
 <p align="center">
   <img
-    src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1782018495"
+    src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787105462"
     alt="gitty icon"
     width="80"
     height="80"
@@ -35,7 +35,7 @@
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787105462"
 width="40"
 height="40"
 alt="git"
@@ -56,7 +56,7 @@ alt="git"
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787105462"
 width="40"
 height="40"
 alt="rebase"
@@ -77,7 +77,7 @@ alt="rebase"
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787105462"
 width="40"
 height="40"
 alt="gitty"
@@ -255,8 +255,9 @@ npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 
 ## Contact
 
-[![vd7.io][badge-vd7]][vd7-url]
-[![/vdutts7][badge-x]][x-url]
+<a href="https://vd7.io"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1787105462" alt="vd7.io" height="40" /></a>
+&nbsp;
+<a href="https://x.com/vdutts7"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1787105462" alt="/vdutts7" height="40" /></a>
 
 [github-badge]: https://img.shields.io/badge/gitty-000000?style=for-the-badge&logo=github&logoColor=white
 [github-url]: https://github.com/vdutts7/gitty
@@ -268,7 +269,3 @@ npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 [i-health]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/infomaniak-kcheck.webp
 [i-snap]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/borg-backup.webp
 [i-json]: https://raw.githubusercontent.com/vdutts7/squircle/main/webp/json.webp
-[badge-vd7]: https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1782018495
-[badge-x]: https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1782018495
-[vd7-url]: https://vd7.io
-[x-url]: https://x.com/vdutts7
