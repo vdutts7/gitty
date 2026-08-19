@@ -15,7 +15,8 @@
     "README.md"
   ],
   "scripts": {
-    "test": "bin/gitty.sh --help",
+    "test": "zsh tests/readme-contact-badges.smoke.sh && bin/gitty.sh --help",
+    "test:readme-badges": "zsh tests/readme-contact-badges.smoke.sh",
     "test:partial": "zsh tests/partial-commit.smoke.sh",
     "test:union": "zsh tests/ndjson-union.smoke.sh",
     "test:snap": "zsh tests/gittysnap.smoke.sh"

@@ -27,16 +27,11 @@ When hooks run, `gitty` prints a pass(🟢)/fail(🔴) summary:
 🟢 - check-em-dashes- fixed (em dash -> hyphen)
 🟢 - clearmeta- metadata stripped
 ── hooks: pre-push ──
-🟢 - shelllock- passed
 🟢 - health-check- all checks passed
 ```
 
 Hook block → 🔴, commit/push stops
 - partial holdback does **not** bypass hook failures
-
-### (optional) shelllock
-
-[`shelllock`](https://github.com/vdutts7/shelllock-macos) Touch ID on pre-push when installed + wired into repo's `.hooks/pre-push`
 
 ## Partial commit vs hooks
 

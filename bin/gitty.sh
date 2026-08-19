@@ -562,12 +562,6 @@ gitty_report_hooks() {
   fi
 
   if [[ "$event" == "pre-push" ]]; then
-    if echo "$output" | grep -qiE 'Touch ID denied|pre-push: BLOCKED'; then
-      echo "🔴 - shelllock — Touch ID denied"
-    elif [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - shelllock — passed"
-    fi
-
     if echo "$output" | grep -q 'Issues found - fix before pushing'; then
       echo "🔴 - health-check — issues found"
     elif echo "$output" | grep -q 'All checks passed'; then
