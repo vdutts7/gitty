@@ -85,6 +85,7 @@ gitty_safe_snapshot() {
   local kind="${1:-integrate}"
   local snap="bak/${kind}-$(date -u +%Y%m%dT%H%M%SZ)"
   git branch "$snap" HEAD 2>/dev/null || true
+  git push origin "$snap" 2>/dev/null || echo "🔴 - Failed to push snapshot $snap to remote" >&2
   echo "🟡 - Safe snapshot: $snap"
 }
 
