@@ -250,9 +250,14 @@ gitty_additive_integrate() {
     echo "🟢 - Additive integrate: merged $target_ref ($target_sha) [$head_before -> $head_after]"
     return 0
   fi
-  if gitty_apply_additive_resolvers; then
-    local audit_body
-    audit_body=$(cat /tmp/gitty-resolver-audit-$$.log 2>/dev/null || true)
+  local resolver_rc
+  gitty_apply_additive_resolvers
+  resolver_rc=$?
+  local audit_body
+  audit_body=$(cat /tmp/gitty-resolver-audit-$$.log 2>/dev/null || true)
+
+  if (( resolver_rc == 0 )); then
+    # All conflicts resolved — commit the merge
     if git commit --no-edit -m "$msg
 
 additive-git: permitted_additive_resolvers
@@ -262,7 +267,33 @@ $audit_body" >/dev/null 2>&1; then
       rm -f /tmp/gitty-resolver-audit-$$.log
       return 0
     fi
+  elif [[ "${GITTY_PARTIAL:-1}" == "1" ]]; then
+    # Partial resolution: some paths resolved, others held back.
+    # Check if any staged (resolved) paths exist beyond the unresolved ones.
+    local -a still_unmerged=()
+    local p
+    while IFS= read -r p; do [[ -n "$p" ]] && still_unmerged+=("$p"); done \
+      < <(git diff --name-only --diff-filter=U 2>/dev/null)
+    if (( ${#still_unmerged[@]} > 0 )); then
+      # Unstage unresolved conflict paths, checkout --ours to clear markers,
+      # then re-add as-is so the merge can commit the resolved subset.
+      for p in "${still_unmerged[@]}"; do
+        git checkout --ours -- "$p" 2>/dev/null || true
+        git add -- "$p" 2>/dev/null || true
+      done
+      if git commit --no-edit -m "$msg
+
+additive-git: partial drip-through (${#still_unmerged[@]} path(s) held back)
+$audit_body" >/dev/null 2>&1; then
+        head_after=$(git rev-parse HEAD 2>/dev/null)
+        echo "🟢 - Additive integrate (partial): merged resolved subset [$head_before -> $head_after]"
+        echo "🟡 - ${#still_unmerged[@]} path(s) held back — resolve manually on next commit"
+        rm -f /tmp/gitty-resolver-audit-$$.log
+        return 0
+      fi
+    fi
   fi
+
   rm -f /tmp/gitty-resolver-audit-$$.log
   gitty_park_conflict "$target_sha"
   return 1
@@ -650,6 +681,30 @@ cd "$root_dir" || {
 
 if [[ -x "$root_dir/scripts/pre-gitty.sh" ]]; then
   "$root_dir/scripts/pre-gitty.sh"
+fi
+
+# Fail fast on foreign-owned .git (usually root from past `sudo git`).
+# Cannot auto-chown without elevating; print heal command and exit.
+gitty_perm_check() {
+  [[ "${GITTY_SKIP_PERM_CHECK:-0}" == "1" ]] && return 0
+  local gd bad
+  gd=$(git rev-parse --absolute-git-dir 2>/dev/null) || return 0
+  bad=$(find "$gd" -not -user "$(whoami)" 2>/dev/null | head -8)
+  if [[ -n "$bad" ]]; then
+    echo "🔴 - Foreign-owned paths under $gd (often root from sudo git)." >&2
+    echo "$bad" | while IFS= read -r line; do
+      [[ -n "$line" ]] && echo "     $line" >&2
+    done
+    echo "     heal: sudo chown -R \"\$(whoami)\" \"$gd\"" >&2
+    echo "     then re-run gitty. (opt out: GITTY_SKIP_PERM_CHECK=1)" >&2
+    return 1
+  fi
+  return 0
+}
+
+if ! gitty_perm_check; then
+  cd "$original_dir"
+  exit 1
 fi
 
 # Refuse to proceed if a rebase/merge/cherry-pick is mid-flight — otherwise the
