@@ -258,7 +258,7 @@ gitty_additive_integrate() {
   audit_body=$(cat /tmp/gitty-resolver-audit-$$.log 2>/dev/null || true)
 
   if (( resolver_rc == 0 )); then
-    # All conflicts resolved — commit the merge
+    # All conflicts resolved - commit the merge
     if git commit --no-edit -m "$msg
 
 additive-git: permitted_additive_resolvers
@@ -288,7 +288,7 @@ additive-git: partial drip-through (${#still_unmerged[@]} path(s) held back)
 $audit_body" >/dev/null 2>&1; then
         head_after=$(git rev-parse HEAD 2>/dev/null)
         echo "🟢 - Additive integrate (partial): merged resolved subset [$head_before -> $head_after]"
-        echo "🟡 - ${#still_unmerged[@]} path(s) held back — resolve manually on next commit"
+        echo "🟡 - ${#still_unmerged[@]} path(s) held back - resolve manually on next commit"
         rm -f /tmp/gitty-resolver-audit-$$.log
         return 0
       fi
@@ -345,7 +345,7 @@ gitty_record_held() {
   done
   gitty_held_paths+=("$path")
   gitty_held_reasons+=("$reason")
-  echo "🔴 - $path — held back ($reason)"
+  echo "🔴 - $path - held back ($reason)"
 }
 
 gitty_file_size() {
@@ -471,20 +471,20 @@ gitty_report_partial() {
         [[ "$p" == "$held_path" ]] && is_held=true && break
       done
       [[ "$is_held" == true ]] && continue
-      echo "🟢 - $p — committed and pushed"
+      echo "🟢 - $p - committed and pushed"
     done
   elif [[ "$committed" == true ]]; then
-    echo "🟢 - commit — committed and pushed"
+    echo "🟢 - commit - committed and pushed"
     pushed_count=1
   elif [[ "$nothing_to_commit" == true && "$push_up_to_date" == true ]]; then
-    echo "🟢 - remote — already up to date"
+    echo "🟢 - remote - already up to date"
   elif [[ "$nothing_to_commit" == true ]]; then
-    echo "🟢 - push — pending commits synced"
+    echo "🟢 - push - pending commits synced"
   fi
 
   if [[ $held_count -gt 0 ]]; then
     for i in {1..$held_count}; do
-      echo "🔴 - ${gitty_held_paths[$i]} — not pushed (${gitty_held_reasons[$i]})"
+      echo "🔴 - ${gitty_held_paths[$i]} - not pushed (${gitty_held_reasons[$i]})"
     done
   fi
 
@@ -499,9 +499,9 @@ gitty_report_partial() {
       done
       [[ "$is_held" == false ]] && pushed_ok=$((pushed_ok + 1))
     done
-    echo "🟢 - partial success — ${pushed_ok} pushed, ${held_count} held back"
+    echo "🟢 - partial success - ${pushed_ok} pushed, ${held_count} held back"
   elif [[ $held_count -gt 0 && $pushed_count -eq 0 && "$nothing_to_commit" != true ]]; then
-    echo "🔴 - nothing pushed — ${held_count} path(s) held back"
+    echo "🔴 - nothing pushed - ${held_count} path(s) held back"
   fi
 }
 
@@ -515,47 +515,47 @@ gitty_report_hooks() {
 
   if [[ "$event" == "pre-commit" ]]; then
     if echo "$output" | grep -q '\[enforce-git-identity\] BLOCKED'; then
-      echo "🔴 - enforce-git-identity — blocked"
+      echo "🔴 - enforce-git-identity - blocked"
     elif echo "$output" | grep -q '\[enforce-git-identity\] OK'; then
-      echo "🟢 - enforce-git-identity — OK"
+      echo "🟢 - enforce-git-identity - OK"
     elif [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - enforce-git-identity — passed"
+      echo "🟢 - enforce-git-identity - passed"
     fi
 
     if echo "$output" | grep -q 'em dashes replaced with hyphens'; then
-      echo "🟢 - check-em-dashes — fixed (em dash -> hyphen)"
+      echo "🟢 - check-em-dashes - fixed (em dash -> hyphen)"
     elif [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - check-em-dashes — passed"
+      echo "🟢 - check-em-dashes - passed"
     fi
 
     if echo "$output" | grep -q 'BLOCKED - staged files under a Python venv'; then
-      echo "🔴 - check-python-venv — venv paths staged"
+      echo "🔴 - check-python-venv - venv paths staged"
     elif [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - check-python-venv — passed"
+      echo "🟢 - check-python-venv - passed"
     fi
 
     if echo "$output" | grep -q 'metadata stripped'; then
-      echo "🟢 - clearmeta — metadata stripped"
+      echo "🟢 - clearmeta - metadata stripped"
     elif [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - clearmeta — passed"
+      echo "🟢 - clearmeta - passed"
     fi
 
     if echo "$output" | grep -q '\[readme-cache-bust\] bumped'; then
-      echo "🟢 - readme-cache-bust — img v= bumped"
+      echo "🟢 - readme-cache-bust - img v= bumped"
     elif echo "$output" | grep -q '\[readme-cache-bust\] skip'; then
-      echo "🟢 - readme-cache-bust — skipped"
+      echo "🟢 - readme-cache-bust - skipped"
     fi
 
     if [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - drop-eof-newline-only — passed"
+      echo "🟢 - drop-eof-newline-only - passed"
     fi
 
-    if echo "$output" | grep -q 'COMMIT BLOCKED — not a repo collaborator'; then
-      echo "🔴 - check-collaborator — not a repo collaborator"
+    if echo "$output" | grep -q 'COMMIT BLOCKED - not a repo collaborator'; then
+      echo "🔴 - check-collaborator - not a repo collaborator"
     elif echo "$output" | grep -q '\[pre-commit\] git user.name not set'; then
-      echo "🔴 - check-collaborator — git user.name not set"
+      echo "🔴 - check-collaborator - git user.name not set"
     elif [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - check-collaborator — passed"
+      echo "🟢 - check-collaborator - passed"
     fi
 
     return
@@ -563,11 +563,11 @@ gitty_report_hooks() {
 
   if [[ "$event" == "pre-push" ]]; then
     if echo "$output" | grep -q 'Issues found - fix before pushing'; then
-      echo "🔴 - health-check — issues found"
+      echo "🔴 - health-check - issues found"
     elif echo "$output" | grep -q 'All checks passed'; then
-      echo "🟢 - health-check — all checks passed"
+      echo "🟢 - health-check - all checks passed"
     elif [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - health-check — passed"
+      echo "🟢 - health-check - passed"
     fi
   fi
 }
@@ -640,6 +640,14 @@ root_dir="${gitty_positional[2]:-}"
   [[ -z "$commit_mssg" ]] && commit_mssg="${_GITTY_DEFAULT_MSG}"
 }
 
+# Banner is ALWAYS the subject line. If caller provided a message, it becomes
+# the body beneath the banner. Agent cannot opt out - structural, not optional.
+if [[ "$commit_mssg" != "$_GITTY_DEFAULT_MSG" ]]; then
+  commit_mssg="${_GITTY_DEFAULT_MSG}
+
+${commit_mssg}"
+fi
+
 [[ -z "$root_dir" ]] && {
   echo -n "Enter root directory (absolute path) [default: $PWD]: "
   read root_dir
@@ -702,14 +710,14 @@ if ! gitty_perm_check; then
   exit 1
 fi
 
-# Refuse to proceed if a rebase/merge/cherry-pick is mid-flight — otherwise the
+# Refuse to proceed if a rebase/merge/cherry-pick is mid-flight - otherwise the
 # stale-base autoheal path would layer a new rebase on top of an in-progress one
 # and produce genuinely unrecoverable state. Opt out with GITTY_ALLOW_INPROGRESS=1
 # only if you know what you're doing (e.g. re-entering after resolving markers).
 if [[ "${GITTY_ALLOW_INPROGRESS:-0}" != "1" ]] && gitty_rebase_in_progress; then
   echo "🔴 - A rebase/merge/cherry-pick is in progress in $root_dir." >&2
   echo "     Finish it (git rebase --continue / --abort, git merge --abort, etc.) or set" >&2
-  echo "     GITTY_ALLOW_INPROGRESS=1 to force. Refusing to run — would compound the state." >&2
+  echo "     GITTY_ALLOW_INPROGRESS=1 to force. Refusing to run - would compound the state." >&2
   cd "$original_dir"
   exit 1
 fi
@@ -718,7 +726,7 @@ fi
 if [[ "${GITTY_ALLOW_CONFLICTS:-0}" != "1" ]] && gitty_working_tree_has_conflict; then
   echo "🔴 - Working tree has conflict markers or unmerged paths in $root_dir." >&2
   echo "     Run 'git status', 'git diff --check', resolve, then re-run gitty." >&2
-  echo "     Set GITTY_ALLOW_CONFLICTS=1 to override (not recommended — the pre-commit" >&2
+  echo "     Set GITTY_ALLOW_CONFLICTS=1 to override (not recommended - the pre-commit" >&2
   echo "     hooks may still reject the commit, and force-pushing conflict markers is" >&2
   echo "     the exact failure mode this guard exists to prevent)." >&2
   cd "$original_dir"
@@ -997,7 +1005,7 @@ if [[ "$nothing_to_commit" == true && "$push_up_to_date" == true ]]; then
   if [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
     echo "🟢 - Remote synced (${#gitty_held_paths[@]} path(s) still held back locally)"
   else
-    echo "🟢 - Nothing to commit or push — remote synced"
+    echo "🟢 - Nothing to commit or push - remote synced"
   fi
 elif [[ "$committed" == true ]]; then
   if [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
