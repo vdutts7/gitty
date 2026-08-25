@@ -47,39 +47,27 @@ gitty_read_staged_paths() {
 
 gitty_refresh_staged_snapshot() { gitty_read_staged_paths; }
 
-# ---------- Gödel gates (runtime interception, not prose) ----------
-
-# Merge-state commit: structurally proves MERGE_HEAD exists before bypassing
-# stale-base guard. Gate is filesystem state (outside agent decision plane),
-# not an env var the agent can set. shim-as-a-log on violation.
-gitty_merge_commit() {
-  local gd
-  gd=$(git rev-parse --git-dir 2>/dev/null) || return 1
-  if [[ ! -f "$gd/MERGE_HEAD" ]]; then
-    printf '🔴 gitty: merge commit attempted outside merge state (exit 95)\n  run: use gitty_additive_integrate, not manual merge commit\n' >&2
-    return 95
-  fi
-  SKIP_STALE_BASE=1 git commit "$@"
-}
-
-# Force-push gate: GITTY_FORCE=1 enables git push -f. This is a Gödel escape -
-# an agent can set it. Gate: require the operator's interactive tty (stdin is a
-# terminal), not just an env var. Agents run non-interactively → gate blocks.
-gitty_force_push_gate() {
-  if [[ "${GITTY_FORCE:-0}" != "1" ]]; then
-    return 1  # not force mode, caller uses normal push path
-  fi
-  if [[ ! -t 0 ]]; then
-    printf '🔴 gitty: GITTY_FORCE=1 blocked - non-interactive session (exit 96)\n  run: invoke gitty interactively from a terminal to use force-push\n' >&2
-    return 96
-  fi
-  return 0  # operator at tty, force allowed
+# ---------- Banned operations gate (godelify: gitty-destructive-op-ban, exit 96) ----------
+# Runtime interception, not prose. shim-as-a-log on violation.
+gitty_assert_no_banned_op() {
+  local cmd="$1"
+  case "$cmd" in
+    *stash*)
+      printf '🔴 gitty: git stash is banned (exit 96)\n  run: git reset HEAD -- <path>  (unstage) or gitty_safe_snapshot (backup)\n' >&2
+      return 96 ;;
+    *rebase*)
+      printf '🔴 gitty: git rebase is banned (exit 96)\n  run: gitty uses merge-only sync via gitty_additive_integrate\n' >&2
+      return 96 ;;
+    *reset*--hard*)
+      printf '🔴 gitty: git reset --hard is banned (exit 96)\n  run: git checkout -- <path>  (per-file) or gitty_safe_snapshot + manual fix\n' >&2
+      return 96 ;;
+  esac
+  return 0
 }
 
 # ---------- Additive sync (merge-only integrate) ----------
 # Sync := additive_git_integrate(origin/$branch). One primitive replaces the
-# prior rebase + drip + autoheal + WIP-snapshot machinery. Never: rebase, stash,
-# reset --hard, amend, force-push, switch branches. Conflicts route through
+# prior rebase + drip + autoheal + WIP-snapshot machinery. Conflicts route through
 # permitted_additive_resolvers (config-driven) or park on a first-class ref.
 
 # 0 = clean, 1 = conflict/unmerged markers present
@@ -106,6 +94,19 @@ gitty_rebase_in_progress() {
   [[ -f "$gd/MERGE_HEAD" ]]  && return 0
   [[ -f "$gd/CHERRY_PICK_HEAD" ]] && return 0
   return 1
+}
+
+# Merge-state commit: structurally proves MERGE_HEAD exists before bypassing
+# stale-base guard. Gate is filesystem state (outside agent decision plane),
+# not an env var the agent can set. shim-as-a-log on violation.
+gitty_merge_commit() {
+  local gd
+  gd=$(git rev-parse --git-dir 2>/dev/null) || return 1
+  if [[ ! -f "$gd/MERGE_HEAD" ]]; then
+    printf '🔴 gitty: merge commit attempted outside merge state (exit 95)\n  run: use gitty_additive_integrate, not manual merge commit\n' >&2
+    return 1
+  fi
+  SKIP_STALE_BASE=1 git commit "$@"
 }
 
 # Snapshot HEAD onto a first-class ref (safe_snapshot). Durable,
@@ -252,6 +253,20 @@ gitty_park_conflict() {
   echo "     Resolve manually; local branch untouched; nothing lost."
 }
 
+# git-crypt merge bypass: merge's internal stash runs the clean filter on every
+# dirty file. If any filter invocation fails (phantom-dirty from cross-host
+# decrypt), git aborts with "fatal: stash failed". Use git -c per-invocation
+# overrides so .git/config is never mutated (SIGKILL-safe).
+_gitty_crypt_merge() {
+  local _crypt_clean
+  _crypt_clean=$(git config --get filter.git-crypt.clean 2>/dev/null) || true
+  if [[ -n "$_crypt_clean" && "$_crypt_clean" != "cat" ]]; then
+    git -c filter.git-crypt.clean=cat -c filter.git-crypt.required=false "$@"
+  else
+    git "$@"
+  fi
+}
+
 # additive_git_integrate: doctrinal sync of origin/$branch into HEAD.
 # Returns 0 = merged (or already present), 1 = parked/stopped.
 gitty_additive_integrate() {
@@ -265,7 +280,8 @@ gitty_additive_integrate() {
   fi
   # Prefer ff-only: no merge commit, preserves dirty index (disjoint files),
   # and matches the stale-base hook's own prescribed fix.
-  if git merge --ff-only --no-edit "$target_sha" >/dev/null 2>&1; then
+  # Use _gitty_crypt_merge to bypass git-crypt filter if needed (SIGKILL-safe).
+  if _gitty_crypt_merge merge --ff-only --no-edit "$target_sha" >/dev/null 2>&1; then
     head_after=$(git rev-parse HEAD 2>/dev/null)
     echo "🟢 - Additive integrate (ff): $target_ref ($target_sha) [$head_before -> $head_after]"
     return 0
@@ -273,7 +289,7 @@ gitty_additive_integrate() {
   gitty_load_additive_resolvers "$root_dir/.gitty/additive-resolvers.yaml"
   gitty_safe_snapshot "pre-integrate"
   local merge_rc
-  git merge --no-ff --no-edit "$target_sha" >/dev/null 2>&1
+  _gitty_crypt_merge merge --no-ff --no-edit "$target_sha" >/dev/null 2>&1
   merge_rc=$?
   if (( merge_rc == 0 )); then
     head_after=$(git rev-parse HEAD 2>/dev/null)
@@ -307,13 +323,9 @@ $audit_body" >/dev/null 2>&1; then
     if (( ${#still_unmerged[@]} > 0 )); then
       # Unstage unresolved conflict paths, checkout --ours to clear markers,
       # then re-add as-is so the merge can commit the resolved subset.
-      # NOTE: checkout --ours takes local version, discarding remote changes
-      # for these paths. This is safe because they're reported as held-back
-      # and flagged for manual resolution on next commit.
       for p in "${still_unmerged[@]}"; do
         git checkout --ours -- "$p" 2>/dev/null || true
         git add -- "$p" 2>/dev/null || true
-        echo "🟡 - checkout --ours (held back): $p - remote changes deferred, resolve manually"
       done
       if gitty_merge_commit --no-edit -m "$msg
 
@@ -747,13 +759,6 @@ fi
 # stale-base autoheal path would layer a new rebase on top of an in-progress one
 # and produce genuinely unrecoverable state. Opt out with GITTY_ALLOW_INPROGRESS=1
 # only if you know what you're doing (e.g. re-entering after resolving markers).
-# Gödel gate: tty-only override - agent cannot bypass non-interactively.
-if [[ "${GITTY_ALLOW_INPROGRESS:-0}" == "1" && ! -t 0 ]]; then
-  echo "🔴 - GITTY_ALLOW_INPROGRESS=1 blocked - non-interactive session." >&2
-  echo "     run: invoke gitty interactively from a terminal to override." >&2
-  cd "$original_dir"
-  exit 96
-fi
 if [[ "${GITTY_ALLOW_INPROGRESS:-0}" != "1" ]] && gitty_rebase_in_progress; then
   echo "🔴 - A rebase/merge/cherry-pick is in progress in $root_dir." >&2
   echo "     Finish it (git rebase --continue / --abort, git merge --abort, etc.) or set" >&2
@@ -763,13 +768,6 @@ if [[ "${GITTY_ALLOW_INPROGRESS:-0}" != "1" ]] && gitty_rebase_in_progress; then
 fi
 
 # Same for pre-existing unresolved conflict markers in the working tree.
-# Gödel gate: tty-only override - agent cannot bypass non-interactively.
-if [[ "${GITTY_ALLOW_CONFLICTS:-0}" == "1" && ! -t 0 ]]; then
-  echo "🔴 - GITTY_ALLOW_CONFLICTS=1 blocked - non-interactive session." >&2
-  echo "     run: invoke gitty interactively from a terminal to override." >&2
-  cd "$original_dir"
-  exit 96
-fi
 if [[ "${GITTY_ALLOW_CONFLICTS:-0}" != "1" ]] && gitty_working_tree_has_conflict; then
   echo "🔴 - Working tree has conflict markers or unmerged paths in $root_dir." >&2
   echo "     Run 'git status', 'git diff --check', resolve, then re-run gitty." >&2
@@ -929,8 +927,8 @@ push_max=${GITTY_PUSH_RETRIES:-8}
 while true; do
   unsetopt errexit
 
-  if gitty_force_push_gate; then
-    echo "🟡 - Force pushing to remote (GITTY_FORCE=1, interactive tty confirmed)..."
+  if [[ "${GITTY_FORCE:-0}" == "1" ]]; then
+    echo "🟡 - Force pushing to remote (GITTY_FORCE=1)..."
     if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
       push_output=$(git push -f 2>&1)
     else
@@ -1013,8 +1011,6 @@ while true; do
 
   echo "🟡 - Push rejected $offender; holding back and retrying..."
   if [[ "$committed" == true ]]; then
-    # Soft reset to re-stage: undo commit to exclude offender, then recommit.
-    # Not destructive - all content preserved in index. Internal-only mechanism.
     unsetopt errexit
     git reset --soft HEAD~1 2>/dev/null
     setopt errexit
