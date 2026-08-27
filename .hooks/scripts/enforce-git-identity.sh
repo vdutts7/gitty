@@ -13,9 +13,10 @@ fi
 
 ROOT_TOP="$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null || true)"
 HOOK_LIB="${ROOT_TOP}/.hooks/scripts/lib/git-identity-lib.sh"
+LIB=""
 [[ -f "$HOOK_LIB" ]] && LIB="$HOOK_LIB"
 SETUP="${ROOT_TOP}/.hooks/scripts/setup-git-identity.sh"
-[[ -f "$LIB" ]] && source "$LIB"
+[[ -n "$LIB" && -f "$LIB" ]] && source "$LIB"
 
 remotes=()
 while IFS= read -r r; do
@@ -65,7 +66,7 @@ fi
 # Commit author (git am / --author sets GIT_AUTHOR_*; config-only check above is insufficient)
 author_name="${GIT_AUTHOR_NAME:-$actual_name}"
 author_email="${GIT_AUTHOR_EMAIL:-$actual_email}"
-if [[ -f "$LIB" ]] && declare -f git_identity_author_ok >/dev/null 2>&1; then
+if [[ -n "$LIB" && -f "$LIB" ]] && declare -f git_identity_author_ok >/dev/null 2>&1; then
   if ! git_identity_author_ok "$want_name" "$want_email" "$author_name" "$author_email"; then
     echo "[enforce-git-identity] BLOCKED: commit author mismatch (route ${want_ns:-unknown})" >&2
     echo "  want:   $want_name <$want_email>" >&2

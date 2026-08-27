@@ -10,8 +10,9 @@ fi
 
 ROOT_TOP="$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null || true)"
 HOOK_LIB="${ROOT_TOP}/.hooks/scripts/lib/git-identity-lib.sh"
+LIB=""
 [[ -f "$HOOK_LIB" ]] && LIB="$HOOK_LIB"
-[[ -f "$LIB" ]] && source "$LIB"
+[[ -n "$LIB" && -f "$LIB" ]] && source "$LIB"
 
 expect_line="$(git_identity_expected_for_target "$TARGET" 2>/dev/null || true)"
 if [[ -z "$expect_line" ]]; then
