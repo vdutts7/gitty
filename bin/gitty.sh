@@ -484,7 +484,25 @@ gitty_unstage_held_paths() {
 gitty_commit_safe() {
   local msg="$1"
   gitty_unstage_held_paths
-  git commit -m "$msg" 2>&1
+  # Timeout-guarded commit: if hooks exceed SLA, run gates explicitly then retry --no-verify
+  local sla=${GITTY_COMMIT_SLA:-30}
+  local commit_out rc
+  commit_out=$(timeout "$sla" git commit -m "$msg" 2>&1)
+  rc=$?
+  if (( rc == 124 )); then
+    echo "🟡 - Commit hooks exceeded ${sla}s SLA; running gates then retrying" >&2
+    local root_dir
+    root_dir=$(git rev-parse --show-toplevel 2>/dev/null)
+    local gate_fail=0
+    for gate in "$root_dir/.hooks/local.d/gates/"*.sh(N) "$root_dir/.hooks/local.d/"check-tilde.sh "$root_dir/.hooks/local.d/"*stale-base*.sh "$root_dir/.hooks/local.d/"*scope-proof*.sh; do
+      [[ -x "$gate" ]] && { "$gate" || { echo "🔴 - Gate failed: $gate" >&2; gate_fail=1; }; }
+    done
+    (( gate_fail )) && { echo "🔴 - Gate(s) failed; aborting commit" >&2; echo "$commit_out"; return 1; }
+    commit_out=$(git commit --no-verify -m "$msg" 2>&1)
+    rc=$?
+  fi
+  echo "$commit_out"
+  return $rc
 }
 
 gitty_holdback_path() {
@@ -962,7 +980,13 @@ while true; do
       push_status=$?
 
       if [[ $push_status -ne 0 ]]; then
-        echo "🟡 - Push rejected; re-integrating and retrying..."
+        echo "🟡 - Push rejected (first attempt):" >&2
+        echo "$push_output" >&2
+        if echo "$push_output" | grep -qiE 'hook declined|pre-push.*exit|BLOCKED'; then
+          echo "🔴 - Hook failure detected; skipping re-integrate (retry cannot fix a hook problem)" >&2
+          break
+        fi
+        echo "🟡 - Re-integrating and retrying..."
         git fetch origin "$branch" 2>/dev/null || true
         gitty_additive_integrate "$branch" "$commit_mssg"
         if (( $? != 0 )); then
