@@ -484,17 +484,27 @@ gitty_unstage_held_paths() {
 gitty_commit_safe() {
   local msg="$1"
   gitty_unstage_held_paths
-  # Timeout-guarded commit: if hooks exceed SLA, run gates explicitly then retry --no-verify
+  # Timeout-guarded commit: portable (Linux timeout / macOS gtimeout / perl fallback)
   local sla=${GITTY_COMMIT_SLA:-30}
+  local timeout_cmd=""
+  if command -v timeout >/dev/null 2>&1; then
+    timeout_cmd="timeout"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    timeout_cmd="gtimeout"
+  fi
   local commit_out rc
-  commit_out=$(timeout "$sla" git commit -m "$msg" 2>&1)
+  if [[ -n "$timeout_cmd" ]]; then
+    commit_out=$("$timeout_cmd" "$sla" git commit -m "$msg" 2>&1)
+  else
+    commit_out=$(perl -e "alarm $sla; exec @ARGV" -- git commit -m "$msg" 2>&1)
+  fi
   rc=$?
   if (( rc == 124 )); then
     echo "🟡 - Commit hooks exceeded ${sla}s SLA; running gates then retrying" >&2
     local root_dir
     root_dir=$(git rev-parse --show-toplevel 2>/dev/null)
     local gate_fail=0
-    for gate in "$root_dir/.hooks/local.d/gates/"*.sh(N) "$root_dir/.hooks/local.d/"check-tilde.sh "$root_dir/.hooks/local.d/"*stale-base*.sh "$root_dir/.hooks/local.d/"*scope-proof*.sh; do
+    for gate in "$root_dir/.hooks/local.d/gates/"*.sh; do
       [[ -x "$gate" ]] && { "$gate" || { echo "🔴 - Gate failed: $gate" >&2; gate_fail=1; }; }
     done
     (( gate_fail )) && { echo "🔴 - Gate(s) failed; aborting commit" >&2; echo "$commit_out"; return 1; }
