@@ -649,7 +649,7 @@ gitty_version() {
 
 gitty_usage_error() {
   echo "🔴 - $1" >&2
-  echo "usage: gitty [-h|--help] [-V|--version] [commit_mssg] [root_dir]" >&2
+  echo "usage: gitty [-h|--help] [-v|-V|--version] [commit_mssg] [root_dir]" >&2
   exit 1
 }
 
@@ -657,13 +657,13 @@ typeset -r _GITTY_DEFAULT_MSG='-------[gitty] snapshotting repo state-------'
 
 show_help() {
   cat << EOF
-Usage: gitty [-h|--help] [-V|--version] [commit_mssg] [root_dir]
+Usage: gitty [-h|--help] [-v|-V|--version] [commit_mssg] [root_dir]
 
 Git add, commit, and force push in one command.
 
 Options:
   -h, --help      Show this help
-  -V, --version   Show version
+  -v, -V, --version   Show version
 
 Arguments:
   commit_mssg  Commit message (prompts if omitted; default ${_GITTY_DEFAULT_MSG})
@@ -681,7 +681,7 @@ typeset -a gitty_positional=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) show_help ;;
-    -V|--version) gitty_version ;;
+    -v|-V|--version) gitty_version ;;
     --)
       shift
       gitty_positional+=("$@")
