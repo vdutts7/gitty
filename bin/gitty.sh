@@ -474,22 +474,6 @@ gitty_parse_push_offender() {
   return 1
 }
 
-# Extract offending path from pre-commit hook output (context-pollution, BLOCKED, etc.)
-gitty_parse_precommit_offender() {
-  local output="$1"
-  local path
-
-  # context-pollution: <path>:<line> contains ...
-  path=$(printf '%s\n' "$output" | grep -oE 'context-pollution: [^:]+' | head -1 | sed 's/^context-pollution: //')
-  [[ -n "$path" ]] && { echo "$path"; return 0 }
-
-  # [hook-name] BLOCKED: <path>
-  path=$(printf '%s\n' "$output" | grep -oiE 'BLOCKED[: ]+[^[:space:]]+' | head -1 | sed 's/^BLOCKED[: ]*//')
-  [[ -n "$path" && -e "$path" ]] && { echo "$path"; return 0 }
-
-  return 1
-}
-
 gitty_unstage_held_paths() {
   local p
   for p in "${gitty_held_paths[@]}"; do
@@ -921,14 +905,17 @@ else
   fi
 
   if [[ "$committed" != true && "${GITTY_PARTIAL:-1}" == "1" ]]; then
-    local offender
-    offender=$(gitty_parse_precommit_offender "$commit_output" 2>/dev/null) || true
-    if [[ -n "$offender" ]]; then
-      echo "🟡 - Pre-commit hook blocked $offender; holding back and retrying clean subset" >&2
+    local -a _elim_staged=("${(@f)$(git diff --cached --name-only 2>/dev/null)}")
+    if (( ${#_elim_staged} > 1 )); then
+      echo "🟡 - Hook rejected commit; elimination scan (${#_elim_staged} paths)" >&2
       gitty_report_hooks pre-commit "$commit_output" 1
-      gitty_holdback_path "$offender" "pre-commit hook: $(printf '%s\n' "$commit_output" | grep -iE 'context-pollution|BLOCKED|exit [0-9]' | head -1)"
-      gitty_refresh_staged_snapshot
-      if ! git diff --cached --quiet 2>/dev/null; then
+      for _elim in "${_elim_staged[@]}"; do
+        [[ -z "$_elim" ]] && continue
+        git restore --staged -- "$_elim" 2>/dev/null || continue
+        if git diff --cached --quiet 2>/dev/null; then
+          git add -- "$_elim" 2>/dev/null
+          continue
+        fi
         unsetopt errexit
         commit_output=$(gitty_commit_safe "$commit_mssg")
         commit_status=$?
@@ -936,12 +923,13 @@ else
         if [[ $commit_status -eq 0 ]]; then
           committed=true
           echo "$commit_output"
+          gitty_holdback_path "$_elim" "pre-commit hook rejection"
           gitty_report_hooks pre-commit "$commit_output" 0
-          echo "🟢 - Partial commit (drip-additive): ${#gitty_held_paths[@]} path(s) held back"
+          echo "🟢 - Partial commit (drip-additive): held back $_elim"
+          break
         fi
-      else
-        echo "🟡 - Nothing committable after holdback; all staged paths were the offender" >&2
-      fi
+        git add -- "$_elim" 2>/dev/null
+      done
     fi
   fi
 
