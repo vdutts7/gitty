@@ -474,6 +474,22 @@ gitty_parse_push_offender() {
   return 1
 }
 
+# Extract offending path from pre-commit hook output (context-pollution, BLOCKED, etc.)
+gitty_parse_precommit_offender() {
+  local output="$1"
+  local path
+
+  # context-pollution: <path>:<line> contains ...
+  path=$(printf '%s\n' "$output" | grep -oE 'context-pollution: [^:]+' | head -1 | sed 's/^context-pollution: //')
+  [[ -n "$path" ]] && { echo "$path"; return 0 }
+
+  # [hook-name] BLOCKED: <path>
+  path=$(printf '%s\n' "$output" | grep -oiE 'BLOCKED[: ]+[^[:space:]]+' | head -1 | sed 's/^BLOCKED[: ]*//')
+  [[ -n "$path" && -e "$path" ]] && { echo "$path"; return 0 }
+
+  return 1
+}
+
 gitty_unstage_held_paths() {
   local p
   for p in "${gitty_held_paths[@]}"; do
@@ -484,35 +500,7 @@ gitty_unstage_held_paths() {
 gitty_commit_safe() {
   local msg="$1"
   gitty_unstage_held_paths
-  # Timeout-guarded commit: portable (Linux timeout / macOS gtimeout / perl fallback)
-  local sla=${GITTY_COMMIT_SLA:-30}
-  local timeout_cmd=""
-  if command -v timeout >/dev/null 2>&1; then
-    timeout_cmd="timeout"
-  elif command -v gtimeout >/dev/null 2>&1; then
-    timeout_cmd="gtimeout"
-  fi
-  local commit_out rc
-  if [[ -n "$timeout_cmd" ]]; then
-    commit_out=$("$timeout_cmd" "$sla" git commit -m "$msg" 2>&1)
-  else
-    commit_out=$(perl -e "alarm $sla; exec @ARGV" -- git commit -m "$msg" 2>&1)
-  fi
-  rc=$?
-  if (( rc == 124 )); then
-    echo "🟡 - Commit hooks exceeded ${sla}s SLA; running gates then retrying" >&2
-    local root_dir
-    root_dir=$(git rev-parse --show-toplevel 2>/dev/null)
-    local gate_fail=0
-    for gate in "$root_dir/.hooks/local.d/gates/"*.sh; do
-      [[ -x "$gate" ]] && { "$gate" || { echo "🔴 - Gate failed: $gate" >&2; gate_fail=1; }; }
-    done
-    (( gate_fail )) && { echo "🔴 - Gate(s) failed; aborting commit" >&2; echo "$commit_out"; return 1; }
-    commit_out=$(git commit --no-verify -m "$msg" 2>&1)
-    rc=$?
-  fi
-  echo "$commit_out"
-  return $rc
+  git commit -m "$msg" 2>&1
 }
 
 gitty_holdback_path() {
@@ -659,7 +647,7 @@ gitty_version() {
 
 gitty_usage_error() {
   echo "🔴 - $1" >&2
-  echo "usage: gitty [-h|--help] [-v|-V|--version] [commit_mssg] [root_dir]" >&2
+  echo "usage: gitty [-h|--help] [-V|--version] [commit_mssg] [root_dir]" >&2
   exit 1
 }
 
@@ -667,13 +655,13 @@ typeset -r _GITTY_DEFAULT_MSG='-------[gitty] snapshotting repo state-------'
 
 show_help() {
   cat << EOF
-Usage: gitty [-h|--help] [-v|-V|--version] [commit_mssg] [root_dir]
+Usage: gitty [-h|--help] [-V|--version] [commit_mssg] [root_dir]
 
 Git add, commit, and force push in one command.
 
 Options:
   -h, --help      Show this help
-  -v, -V, --version   Show version
+  -V, --version   Show version
 
 Arguments:
   commit_mssg  Commit message (prompts if omitted; default ${_GITTY_DEFAULT_MSG})
@@ -691,7 +679,7 @@ typeset -a gitty_positional=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) show_help ;;
-    -v|-V|--version) gitty_version ;;
+    -V|--version) gitty_version ;;
     --)
       shift
       gitty_positional+=("$@")
@@ -932,6 +920,31 @@ else
     fi
   fi
 
+  if [[ "$committed" != true && "${GITTY_PARTIAL:-1}" == "1" ]]; then
+    local offender
+    offender=$(gitty_parse_precommit_offender "$commit_output" 2>/dev/null) || true
+    if [[ -n "$offender" ]]; then
+      echo "🟡 - Pre-commit hook blocked $offender; holding back and retrying clean subset" >&2
+      gitty_report_hooks pre-commit "$commit_output" 1
+      gitty_holdback_path "$offender" "pre-commit hook: $(printf '%s\n' "$commit_output" | grep -iE 'context-pollution|BLOCKED|exit [0-9]' | head -1)"
+      gitty_refresh_staged_snapshot
+      if ! git diff --cached --quiet 2>/dev/null; then
+        unsetopt errexit
+        commit_output=$(gitty_commit_safe "$commit_mssg")
+        commit_status=$?
+        setopt errexit
+        if [[ $commit_status -eq 0 ]]; then
+          committed=true
+          echo "$commit_output"
+          gitty_report_hooks pre-commit "$commit_output" 0
+          echo "🟢 - Partial commit (drip-additive): ${#gitty_held_paths[@]} path(s) held back"
+        fi
+      else
+        echo "🟡 - Nothing committable after holdback; all staged paths were the offender" >&2
+      fi
+    fi
+  fi
+
   if [[ "$committed" != true ]]; then
     if echo "$commit_output" | grep -qiE 'hook declined|BLOCKED|failed'; then
       echo "🔴 - Commit blocked by hook" >&2
@@ -990,13 +1003,7 @@ while true; do
       push_status=$?
 
       if [[ $push_status -ne 0 ]]; then
-        echo "🟡 - Push rejected (first attempt):" >&2
-        echo "$push_output" >&2
-        if echo "$push_output" | grep -qiE 'hook declined|pre-push.*exit|BLOCKED'; then
-          echo "🔴 - Hook failure detected; skipping re-integrate (retry cannot fix a hook problem)" >&2
-          break
-        fi
-        echo "🟡 - Re-integrating and retrying..."
+        echo "🟡 - Push rejected; re-integrating and retrying..."
         git fetch origin "$branch" 2>/dev/null || true
         gitty_additive_integrate "$branch" "$commit_mssg"
         if (( $? != 0 )); then
