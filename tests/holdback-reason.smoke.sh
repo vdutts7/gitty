@@ -45,7 +45,7 @@ HOOK
   if [[ "$with_catalog" == "1" ]]; then
     mkdir -p "$fx/.gitty"
     cat > "$fx/.gitty/holdback-reasons.json" <<'CAT'
-{ "rules": [ { "code": "HOLD-TILDE-93", "match": "context-pollution: (\\S+):(\\d+) contains bare ~/", "reason": "bare tilde-slash at $1:$2", "fix": "use \$HOME" } ] }
+{ "rules": [ { "code": "HOLD-TILDE-93", "match": "context-pollution: (\\S+):(\\d+) contains bare ~/", "reason": "bare tilde-slash at $1:$2", "fix": "use $HOME" } ] }
 CAT
   fi
   print -r -- "fine" > "$fx/clean.txt"
