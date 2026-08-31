@@ -89,7 +89,7 @@ alt="gitty"
 <td align="left">
 <ul>
 <li>push the clean subset</li>
-<li>hold blockers locally</li>
+<li>hold blockers locally (size / submodule / hook)</li>
 <li>park only if nothing can land</li>
 </ul>
 </td>
@@ -102,7 +102,7 @@ alt="gitty"
 flowchart LR
   T[tree] --> Q{can this path land?}
   Q -->|yes| P[commit + push]
-  Q -->|conflict / too big / submodule| H[hold back]
+  Q -->|conflict / too big / submodule / hook reject| H[hold back]
   P --> R[keep going]
   H --> R
   R --> F{anything still blocked?}
@@ -136,6 +136,14 @@ flowchart LR
 
 - one blocker used to abort the whole run
 
+### ❌ Hook-block stalls the clean subset
+
+- pre-commit rejects one path (context-pollution, tilde, policy)
+
+- rest of the staged tree was fine
+
+- drip: eliminate the offender, land the rest, hold with a specific reason
+
 ### ❌ Append ledger false conflicts
 
 - two hosts append different `.ndjson` / `.jsonl` lines
@@ -148,14 +156,96 @@ flowchart LR
 
 ## Options
 
-| | Bin | Job | When |
-|---|---|---|---|
-| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787107583" width="40" height="40" alt="gitty" /> | `gitty` | drip + holdback -> commit -> push | default backup |
-| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git-lfs.webp?v=1787107583" width="40" height="40" alt="lfs" /> | `gittylfs` | same + LFS track | big binaries |
-| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583" width="40" height="40" alt="git" /> | `gittyembedded` | submodules then parent | dirty nested repos |
-| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/infomaniak-kcheck.webp?v=1787107583" width="40" height="40" alt="health" /> | `gittyhealth` | report only | inspect / mid-op |
-| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/borg-backup.webp?v=1787107583" width="40" height="40" alt="snap" /> | `gittysnap` | snap -> merge -> abort clean | solo multi-machine |
-| <img src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/json.webp?v=1787107583" width="40" height="40" alt="union" /> | `gittyunion` | NDJSON union driver | append ledgers |
+<table>
+<thead>
+<tr>
+<th align="left"></th>
+<th align="left">Bin</th>
+<th align="left">Job</th>
+<th align="left">When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">
+<img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787107583"
+width="40"
+height="40"
+alt="gitty"
+/>
+</td>
+<td align="left"><code>gitty</code></td>
+<td align="left">drip + holdback -> commit -> push</td>
+<td align="left">default backup</td>
+</tr>
+<tr>
+<td align="left">
+<img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git-lfs.webp?v=1787107583"
+width="40"
+height="40"
+alt="lfs"
+/>
+</td>
+<td align="left"><code>gittylfs</code></td>
+<td align="left">same + LFS track</td>
+<td align="left">big binaries</td>
+</tr>
+<tr>
+<td align="left">
+<img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583"
+width="40"
+height="40"
+alt="git"
+/>
+</td>
+<td align="left"><code>gittyembedded</code></td>
+<td align="left">submodules then parent</td>
+<td align="left">dirty nested repos</td>
+</tr>
+<tr>
+<td align="left">
+<img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/infomaniak-kcheck.webp?v=1787107583"
+width="40"
+height="40"
+alt="health"
+/>
+</td>
+<td align="left"><code>gittyhealth</code></td>
+<td align="left">report only</td>
+<td align="left">inspect / mid-op</td>
+</tr>
+<tr>
+<td align="left">
+<img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/borg-backup.webp?v=1787107583"
+width="40"
+height="40"
+alt="snap"
+/>
+</td>
+<td align="left"><code>gittysnap</code></td>
+<td align="left">snap -> merge -> abort clean</td>
+<td align="left">solo multi-machine</td>
+</tr>
+<tr>
+<td align="left">
+<img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/json.webp?v=1787107583"
+width="40"
+height="40"
+alt="union"
+/>
+</td>
+<td align="left"><code>gittyunion</code></td>
+<td align="left">NDJSON union driver</td>
+<td align="left">append ledgers</td>
+</tr>
+</tbody>
+</table>
 
 Separate bins. Same package. Plain `gitty` != `gittysnap`.
 
@@ -198,9 +288,20 @@ semantic_union:
 ```bash
 # land whatever can land; hold blockers; park only if nothing can
 gitty "checkpoint" "$HOME/Documents/a/gitty"
+gitty -v
 ```
 
 `GITTY_PARTIAL=1` default. Park-only: `GITTY_PARTIAL=0`. Bulldoze: `GITTY_FORCE=1`.
+
+Holdback reasons:
+
+- optional `.gitty/holdback-reasons.json` or `GITTY_HOLDBACK_CATALOG`
+
+- maps hook stderr → stable `[CODE] reason`
+
+- missing catalog → offender stderr (never mute constant)
+
+Stale remote tip: autoheal fetch+rebase unless `GITTY_NO_STALE_BASE_HEAL=1`.
 
 ### Path B · `gittysnap`
 
@@ -221,7 +322,9 @@ gittyunion install
 | signal | meaning |
 |---|---|
 | partial integrate | resolved subset committed; held paths stay local |
-| holdback | oversized / submodule / push-reject left unstaged |
+| holdback | oversized / submodule / push-reject / hook-reject left unstaged |
+| `[CODE] reason` | catalog match for pre-commit reject (else offender stderr line) |
+| elimination scan | hook blocked commit; drip retries without each staged path |
 | park | nothing could land; `bak/pending-merge-*` + `remote-snapshot-*` |
 
 Local branch stays put on park. Nothing lost.
@@ -232,6 +335,9 @@ Local branch stays put on park. Nothing lost.
 |---|---|---|---|
 | one unresolvable file parks whole merge | drip (`GITTY_PARTIAL=1`): commit resolved subset | stable | backup as much as possible |
 | oversized path blocks push | leave `GITTY_PARTIAL=1` | stable | hold back; push the rest |
+| pre-commit rejects one staged path | leave `GITTY_PARTIAL=1`; elimination drip holds that path | stable | clean subset still lands |
+| mute `pre-commit hook rejection` reason | `.gitty/holdback-reasons.json` or `GITTY_HOLDBACK_CATALOG` | stable | stable `[CODE]` + fix hint |
+| remote ahead / stale-base guard | leave autoheal on; `GITTY_NO_STALE_BASE_HEAL=1` to skip | stable | fetch+rebase then retry |
 | N-commit rebase replays same conflict N times | `merge --ff-only` then `--no-ff` once | stable | one merge, one conflict set |
 | per-host artifact conflicts every sync | `.gitty/additive-resolvers.yaml` `per_host` | stable | ours on that host; `--no-ff` keeps both parents |
 | `.ndjson` append conflict | `semantic_union` or `gittyunion install` | stable | union + dedupe + stable-sort |
@@ -255,9 +361,15 @@ npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 
 ## Contact
 
-<a href="https://vd7.io"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1787107583" alt="vd7.io" height="40" /></a>
+<a href="https://vd7.io"><img
+src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1787107583" height="40"
+alt="vd7.io"
+/></a>
 &nbsp;
-<a href="https://x.com/vdutts7"><img src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1787107583" alt="/vdutts7" height="40" /></a>
+<a href="https://x.com/vdutts7"><img
+src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1787107583" height="40"
+alt="/vdutts7"
+/></a>
 
 [github-badge]: https://img.shields.io/badge/gitty-000000?style=for-the-badge&logo=github&logoColor=white
 [github-url]: https://github.com/vdutts7/gitty

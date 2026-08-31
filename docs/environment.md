@@ -10,10 +10,13 @@ Process env only by default. Optional: set `GITTY_ENV` to a file path to `source
 | `GITTY_MAX_FILE_BYTES` | `104857600` (100 MiB) | pre-commit size threshold for holdback |
 | `GITTY_PUSH_RETRIES` | `8` | max push→holdback→recommit cycles |
 | `GITTY_FORCE` | unset | `1` = bulldoze `push -f` (solo escape hatch) |
+| `GITTY_HOLDBACK_CATALOG` | unset | path to holdback-reasons.json (else `<repo>/.gitty/holdback-reasons.json`) |
 | `GITTY_NO_STALE_BASE_HEAL` | unset | `1` = skip stale-base autoheal |
 | `GITTY_NO_UNION_AUTOINSTALL` | unset | `1` = skip ndjson-union auto-register |
 | `GITTY_ALLOW_INPROGRESS` | unset | `1` = allow run during mid-rebase/merge/cherry-pick (default: refuse) |
 | `GITTY_ALLOW_CONFLICTS` | unset | `1` = allow run with conflict markers/unmerged paths (default: refuse) |
+| `GITTY_SKIP_PERM_CHECK` | unset | `1` = skip foreign-owned `.git` fail-fast |
+| `GITTY_DEBUG` | unset | `1` = verbose holdback/staging traces |
 | `README_CACHE_BUST` | unset | `1` = force-bump `?v=` on all README `<img src>` |
 | `GITTY_ENV` | unset | if set to an existing file, `source` it (opt-in only) |
 

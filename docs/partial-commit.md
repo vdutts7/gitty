@@ -24,9 +24,23 @@ git add -A
 | Submodule gitlink (`160000`) | Pre-commit scan | `submodule (use gittyembedded)` |
 | File over size limit | Pre-commit scan | `exceeds push size limit (N bytes)` |
 | Push-rejected path | After failed push | `push rejected` |
+| Pre-commit hook reject | Elimination drip (`GITTY_PARTIAL=1`) | catalog `[CODE] reason` or offender stderr |
 
 Default size limit: **100 MiB** (GitHub hard limit)
 - Override with `GITTY_MAX_FILE_BYTES`
+
+## Hook elimination drip
+
+When `git commit` fails under `GITTY_PARTIAL=1` and more than one path is staged:
+
+1. snapshot hook stderr
+2. unstage each path in turn; retry commit on the remainder
+3. on success, hold the eliminated path with `gitty_holdback_reason`
+4. catalog (optional): `.gitty/holdback-reasons.json` or `GITTY_HOLDBACK_CATALOG`
+   - `rules[].match` regex vs hook stderr → `[code] reason` (+ optional `fix`)
+   - no catalog / no match → specific offender stderr + exit code (never mute `pre-commit hook rejection`)
+
+Canonical test: `tests/holdback-reason.smoke.sh`
 
 ## Ex
 
