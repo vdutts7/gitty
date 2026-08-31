@@ -1,6 +1,6 @@
 {
   "name": "@vd7/gitty",
-  "version": "0.6.14",
+  "version": "0.6.15",
   "description": "snapshot checkpoint CLI: gitty + gittysnap + gittyunion (content first)",
   "bin": {
     "gitty": "bin/gitty.sh",

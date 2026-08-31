@@ -463,13 +463,13 @@ gitty_holdback_offenders() {
 
 gitty_parse_push_offender() {
   local output="$1"
-  local path
+  local off_path
 
-  path=$(printf '%s\n' "$output" | grep -oiE 'File [^[:space:]]+ is [0-9.]+ MB' | head -1 | awk '{print $2}')
-  [[ -n "$path" ]] && { echo "$path"; return 0 }
+  off_path=$(printf '%s\n' "$output" | grep -oiE 'File [^[:space:]]+ is [0-9.]+ MB' | head -1 | awk '{print $2}')
+  [[ -n "$off_path" ]] && { echo "$off_path"; return 0 }
 
-  path=$(printf '%s\n' "$output" | grep -oiE 'remote: error: File [^[:space:]]+ is' | head -1 | awk '{print $4}')
-  [[ -n "$path" ]] && { echo "$path"; return 0 }
+  off_path=$(printf '%s\n' "$output" | grep -oiE 'remote: error: File [^[:space:]]+ is' | head -1 | awk '{print $4}')
+  [[ -n "$off_path" ]] && { echo "$off_path"; return 0 }
 
   return 1
 }
@@ -491,6 +491,73 @@ gitty_holdback_path() {
   local path="$1" reason="$2"
   "${GITTY_GIT[@]}" reset HEAD -- "$path" 2>/dev/null || true
   gitty_record_held "$path" "$reason"
+}
+
+# Canonicalize a pre-commit hook rejection into a specific, stable holdback
+# reason instead of the mute constant "pre-commit hook rejection".
+# Catalog (optional): $GITTY_HOLDBACK_CATALOG or <repo>/.gitty/holdback-reasons.json.
+#   rules[].match (regex) vs the raw hook stderr -> "[code] reason" with $1..$9
+#   = capture groups (+ optional fix hint). No catalog / no match -> the most
+#   specific offender stderr line + exit code (never a bare constant).
+gitty_holdback_reason() {
+  setopt localoptions
+  unsetopt errexit
+  local hb_path="$1" reject="$2"
+  local catalog="${GITTY_HOLDBACK_CATALOG:-${root_dir:-$PWD}/.gitty/holdback-reasons.json}"
+  local canon="" line ec
+
+  if [[ -f "$catalog" ]] && command -v python3 >/dev/null 2>&1; then
+    canon=$(GITTY_HB_PATH="$hb_path" GITTY_HB_REJECT="$reject" python3 - "$catalog" <<'PY' 2>/dev/null
+import json, os, re, sys
+try:
+    cat = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+path = os.environ.get("GITTY_HB_PATH", "")
+reject = os.environ.get("GITTY_HB_REJECT", "")
+for rule in cat.get("rules", []):
+    pat = rule.get("match")
+    if not pat:
+        continue
+    try:
+        m = re.search(pat, reject)
+    except re.error:
+        continue
+    if not m:
+        continue
+    def _sub(mm):
+        try:
+            return m.group(int(mm.group(1))) or ""
+        except Exception:
+            return ""
+    reason = re.sub(r"\$([1-9])", _sub, rule.get("reason", ""))
+    out = f"[{rule.get('code', 'HOLD')}] {reason}".rstrip()
+    fix = rule.get("fix", "")
+    if fix:
+        out += f" - {fix}"
+    print(out)
+    break
+PY
+)
+    if [[ -n "$canon" ]]; then
+      print -r -- "$canon"
+      return 0
+    fi
+  fi
+
+  # Fallback: the most specific stderr line we can find for this path.
+  line=$(printf '%s\n' "$reject" | grep -F -- "$hb_path" 2>/dev/null | grep -iE 'error|exit|blocked|pollution|:[0-9]+' | head -1)
+  [[ -z "$line" ]] && line=$(printf '%s\n' "$reject" | grep -iE 'exit [0-9]+|error|blocked' | head -1)
+  line=$(printf '%s' "$line" | sed -E 's/^[^A-Za-z0-9]+//; s/[[:space:]]+/ /g; s/[[:space:]]*$//')
+  ec=$(printf '%s\n' "$reject" | grep -oiE 'exit [0-9]+' | head -1 | grep -oE '[0-9]+')
+  if [[ -n "$line" ]]; then
+    [[ -n "$ec" && "$line" != *"$ec"* ]] && line="$line (exit $ec)"
+    print -r -- "pre-commit: $line"
+  elif [[ -n "$ec" ]]; then
+    print -r -- "pre-commit hook rejection (exit $ec)"
+  else
+    print -r -- "pre-commit hook rejection"
+  fi
 }
 
 gitty_report_partial() {
@@ -601,6 +668,16 @@ gitty_report_hooks() {
       echo "🔴 - check-collaborator - git user.name not set"
     elif [[ "$hook_rc" -eq 0 ]]; then
       echo "🟢 - check-collaborator - passed"
+    fi
+
+    # Surface local.d gate failures (check-tilde, scope-proof, stale-base, ...)
+    # that the fixed-hook dashboard above has no branch for.
+    if [[ "$hook_rc" -ne 0 ]]; then
+      local _gl
+      while IFS= read -r _gl; do
+        _gl=$(printf '%s' "$_gl" | sed -E 's/^[^A-Za-z0-9]+//; s/[[:space:]]+/ /g; s/[[:space:]]*$//')
+        [[ -n "$_gl" ]] && echo "🔴 - gate - $_gl"
+      done < <(printf '%s\n' "$output" | grep -E '\(exit [0-9]+\)' || true)
     fi
 
     return
@@ -907,6 +984,7 @@ else
   if [[ "$committed" != true && "${GITTY_PARTIAL:-1}" == "1" ]]; then
     local -a _elim_staged=("${(@f)$(git diff --cached --name-only 2>/dev/null)}")
     if (( ${#_elim_staged} > 1 )); then
+      local _reject_output="$commit_output"
       echo "🟡 - Hook rejected commit; elimination scan (${#_elim_staged} paths)" >&2
       gitty_report_hooks pre-commit "$commit_output" 1
       for _elim in "${_elim_staged[@]}"; do
@@ -923,7 +1001,7 @@ else
         if [[ $commit_status -eq 0 ]]; then
           committed=true
           echo "$commit_output"
-          gitty_holdback_path "$_elim" "pre-commit hook rejection"
+          gitty_holdback_path "$_elim" "$(gitty_holdback_reason "$_elim" "$_reject_output")"
           gitty_report_hooks pre-commit "$commit_output" 0
           echo "🟢 - Partial commit (drip-additive): held back $_elim"
           break
