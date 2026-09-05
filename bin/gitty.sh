@@ -985,29 +985,83 @@ else
     local -a _elim_staged=("${(@f)$(git diff --cached --name-only 2>/dev/null)}")
     if (( ${#_elim_staged} > 1 )); then
       local _reject_output="$commit_output"
-      echo "🟡 - Hook rejected commit; elimination scan (${#_elim_staged} paths)" >&2
+      local _elim_total=${#_elim_staged}
       gitty_report_hooks pre-commit "$commit_output" 1
-      for _elim in "${_elim_staged[@]}"; do
-        [[ -z "$_elim" ]] && continue
-        git restore --staged -- "$_elim" 2>/dev/null || continue
-        if git diff --cached --quiet 2>/dev/null; then
-          git add -- "$_elim" 2>/dev/null
-          continue
-        fi
-        unsetopt errexit
-        commit_output=$(gitty_commit_safe "$commit_mssg")
-        commit_status=$?
-        setopt errexit
-        if [[ $commit_status -eq 0 ]]; then
-          committed=true
-          echo "$commit_output"
-          gitty_holdback_path "$_elim" "$(gitty_holdback_reason "$_elim" "$_reject_output")"
-          gitty_report_hooks pre-commit "$commit_output" 0
-          echo "🟢 - Partial commit (drip-additive): held back $_elim"
-          break
-        fi
-        git add -- "$_elim" 2>/dev/null
+
+      # Targeted retry: parse a plausible file path from hook stderr and try
+      # removing just that one first. If it matches a staged path, cost = 1
+      # commit attempt instead of N. Fallback: brute-force elimination scan
+      # with per-iteration progress so long-running scans stay visible.
+      # Targeted retry: iterate every plausible path in hook stderr and pick
+      # the FIRST one that appears in _elim_staged. Constraint: only accept
+      # RELATIVE paths (a leading '/' is treated as noise). Rationale: gate
+      # hooks name offenders with relative paths ('tools/foo.sh:12'), while
+      # ancillary hooks like clearmeta emit '/home/…/absolute/…' lines that
+      # aren't offenders. Considering only relative paths avoids mismatch on
+      # clearmeta noise and never confuses a suffix collision for a real hit.
+      local -a _elim_cands
+      _elim_cands=("${(@f)$(printf '%s\n' "$_reject_output" \
+        | grep -oE '(^|[[:space:]:(])([A-Za-z0-9_./+-]+\.(sh|zsh|py|md|json|yaml|yml|txt|c|h|cpp|hpp|js|ts|jsx|tsx|go|rs|rb|toml|ini|xml|html|css))' \
+        | sed -E 's/^[[:space:]:(]+//; s|^\./||')}")
+      local _cand _elim_hint _matched=0
+      for _cand in "${_elim_cands[@]}"; do
+        [[ -z "$_cand" || "$_cand" == /* ]] && continue   # skip absolute-path noise
+        for _p in "${_elim_staged[@]}"; do
+          [[ "$_p" == "$_cand" ]] && { _elim_hint="$_p"; _matched=1; break 2; }
+        done
       done
+
+      if (( _matched )); then
+        echo "🟡 - Hook rejected; parsed offender from stderr: $_elim_hint" >&2
+        echo "🟡 -   attempting commit without it (targeted retry, no scan)..." >&2
+        git restore --staged -- "$_elim_hint" 2>/dev/null
+        if git diff --cached --quiet 2>/dev/null; then
+          git add -- "$_elim_hint" 2>/dev/null
+        else
+          unsetopt errexit
+          commit_output=$(gitty_commit_safe "$commit_mssg")
+          commit_status=$?
+          setopt errexit
+          if [[ $commit_status -eq 0 ]]; then
+            committed=true
+            echo "$commit_output"
+            gitty_holdback_path "$_elim_hint" "$(gitty_holdback_reason "$_elim_hint" "$_reject_output")"
+            gitty_report_hooks pre-commit "$commit_output" 0
+            echo "🟢 - Partial commit (drip-additive): held back $_elim_hint (1 attempt)"
+          else
+            # Targeted retry failed; re-stage and fall through to brute force.
+            git add -- "$_elim_hint" 2>/dev/null
+          fi
+        fi
+      fi
+
+      if [[ "$committed" != true ]]; then
+        echo "🟡 - Hook rejected commit; elimination scan ($_elim_total paths)" >&2
+        local _elim_n=0 _elim
+        for _elim in "${_elim_staged[@]}"; do
+          [[ -z "$_elim" ]] && continue
+          _elim_n=$((_elim_n + 1))
+          printf '🟡 - [%d/%d] trying without %s\n' "$_elim_n" "$_elim_total" "$_elim" >&2
+          git restore --staged -- "$_elim" 2>/dev/null || continue
+          if git diff --cached --quiet 2>/dev/null; then
+            git add -- "$_elim" 2>/dev/null
+            continue
+          fi
+          unsetopt errexit
+          commit_output=$(gitty_commit_safe "$commit_mssg")
+          commit_status=$?
+          setopt errexit
+          if [[ $commit_status -eq 0 ]]; then
+            committed=true
+            echo "$commit_output"
+            gitty_holdback_path "$_elim" "$(gitty_holdback_reason "$_elim" "$_reject_output")"
+            gitty_report_hooks pre-commit "$commit_output" 0
+            printf '🟢 - Partial commit (drip-additive): held back %s (after %d/%d)\n' "$_elim" "$_elim_n" "$_elim_total"
+            break
+          fi
+          git add -- "$_elim" 2>/dev/null
+        done
+      fi
     fi
   fi
 

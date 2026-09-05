@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Composition runner: dispatch every executable in pre-commit.d/ in filename order.
-# Write-once; never regenerated. A check blocks by exiting non-zero (set -e); an
-# empty dir is a no-op sealed by exit 0. No append, no glob-miss trap.
+# Composition runner: dispatch three lanes in filename order before exit 0.
+#   1. .hooks/pre-commit.d/*     - upstream framework checks (this repo)
+#   2. .hooks/local.d/cosmetic/* - consumer style fixers (advisory; never blocks)
+#   3. .hooks/local.d/gates/*    - consumer invariant enforcers (block on non-zero)
+# Empty dirs are no-ops. local.d/ is a first-class extension point for consumers.
 set -e
 ROOT="$(git rev-parse --show-toplevel)"; export ROOT
-for s in "$ROOT"/.hooks/pre-commit.d/*; do [[ -x "$s" ]] && "$s" "$@"; done
+for s in "$ROOT"/.hooks/pre-commit.d/*;      do [[ -x "$s" ]] && "$s" "$@"; done
+for s in "$ROOT"/.hooks/local.d/cosmetic/*;  do [[ -x "$s" ]] && { "$s" "$@" || true; }; done
+for s in "$ROOT"/.hooks/local.d/gates/*;     do [[ -x "$s" ]] && "$s" "$@"; done
 exit 0

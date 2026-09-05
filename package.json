@@ -1,6 +1,6 @@
 {
   "name": "@vd7/gitty",
-  "version": "0.6.17",
+  "version": "0.6.18",
   "description": "snapshot checkpoint CLI: gitty + gittysnap + gittyunion (content first)",
   "bin": {
     "gitty": "bin/gitty.sh",
@@ -15,11 +15,12 @@
     "README.md"
   ],
   "scripts": {
-    "test": "zsh tests/readme-contact-badges.smoke.sh && bin/gitty.sh --help",
+    "test": "zsh tests/readme-contact-badges.smoke.sh && zsh tests/hook-extension.smoke.sh && bin/gitty.sh --help",
     "test:readme-badges": "zsh tests/readme-contact-badges.smoke.sh",
     "test:partial": "zsh tests/partial-commit.smoke.sh",
     "test:union": "zsh tests/ndjson-union.smoke.sh",
-    "test:snap": "zsh tests/gittysnap.smoke.sh"
+    "test:snap": "zsh tests/gittysnap.smoke.sh",
+    "test:hook-extension": "zsh tests/hook-extension.smoke.sh"
   },
   "keywords": [
     "git",

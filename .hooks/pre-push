@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Composition runner: dispatch pre-push.d/ in filename order. git pipes the ref
-# list on stdin once -> capture to a tempfile and replay it to each check.
+# Composition runner: dispatch two lanes in filename order before exit 0.
+#   1. .hooks/pre-push.d/*       - upstream framework checks (this repo)
+#   2. .hooks/local.d/pre-push/* - consumer pre-push extensions
+# git pipes the ref list on stdin ONCE; capture to a tempfile and replay it
+# to each check so every hook sees it. Empty dirs are no-ops. local.d/ is a
+# first-class extension point for consumers.
 set -e
 ROOT="$(git rev-parse --show-toplevel)"; export ROOT
 tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
 cat > "$tmp"
-for s in "$ROOT"/.hooks/pre-push.d/*; do [[ -x "$s" ]] && "$s" "$@" < "$tmp"; done
+for s in "$ROOT"/.hooks/pre-push.d/*;       do [[ -x "$s" ]] && "$s" "$@" < "$tmp"; done
+for s in "$ROOT"/.hooks/local.d/pre-push/*; do [[ -x "$s" ]] && "$s" "$@" < "$tmp"; done
 exit 0
