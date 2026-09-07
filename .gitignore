@@ -646,6 +646,8 @@ nimcache/
   
 # Python
 lib/
+!bin/hooks-lib/lib/
+!bin/hooks-lib/lib/**
 lib64/
 .cache
   
