@@ -4,6 +4,14 @@
 
 setopt errexit pipefail
 
+# install-hooks subcommand: forward to bin/init-hooks.sh (v0.6.19+)
+if [[ "${1:-}" == "install-hooks" ]]; then
+  shift
+  _bin_dir="${0:A:h}"
+  exec bash "$_bin_dir/init-hooks.sh" "$@"
+fi
+
+
 typeset -r _GITTY_ROOT="${0:A:h:h}"
 
 # Preserve CLI env overrides across optional GITTY_ENV source
@@ -999,9 +1007,14 @@ else
       # ancillary hooks like clearmeta emit '/home/…/absolute/…' lines that
       # aren't offenders. Considering only relative paths avoids mismatch on
       # clearmeta noise and never confuses a suffix collision for a real hit.
+      # Prefer lines with explicit violation signals; fall back to all lines.
+      local _reject_signal
+      _reject_signal=$(printf '%s\n' "$_reject_output" | grep -Ei 'context-pollution|BLOCKED|error|FAIL|reject|violat')
+      local _reject_scan
+      _reject_scan=${_reject_signal:-$_reject_output}
       local -a _elim_cands
-      _elim_cands=("${(@f)$(printf '%s\n' "$_reject_output" \
-        | grep -oE '(^|[[:space:]:(])([A-Za-z0-9_./+-]+\.(sh|zsh|py|md|json|yaml|yml|txt|c|h|cpp|hpp|js|ts|jsx|tsx|go|rs|rb|toml|ini|xml|html|css))' \
+      _elim_cands=("${(@f)$(printf '%s\n' "$_reject_scan" \
+        | grep -oE '(^|[[:space:]:(])([A-Za-z0-9_./+-]+\.(sh|zsh|py|md|json|yaml|yml|txt|c|h|cpp|hpp|js|ts|jsx|tsx|go|rs|rb|toml|ini|xml|html|css|wasm|lua|zig|nix|env|conf|properties|proto))' \
         | sed -E 's/^[[:space:]:(]+//; s|^\./||')}")
       local _cand _elim_hint _matched=0
       for _cand in "${_elim_cands[@]}"; do

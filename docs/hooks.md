@@ -43,6 +43,43 @@ Hook block → 🔴, commit/push stops
 They are **independent**:
 - a hook block still aborts whole commit **even when partial mode is on**
 
+## Installing the runners: `gitty install-hooks` (added v0.6.19)
+
+`npm i -g @vd7/gitty` ships the composition runners and a set of consumer-safe
+hook scripts (`bin/hooks-lib/`). Install them into any git repo with:
+
+```sh
+gitty install-hooks                       # write runners into the current repo
+gitty install-hooks --repo /path/to/repo  # target another repo
+gitty install-hooks --force               # overwrite existing runners
+```
+
+`install-hooks` is idempotent (a second run leaves the `.hooks/` tree
+unchanged), never clobbers an existing runner unless `--force` is passed, and
+sets `core.hooksPath` to `.hooks`. It writes the canonical `pre-commit` /
+`pre-push` runners plus the empty lane directories (`pre-commit.d/`,
+`pre-push.d/`, `local.d/cosmetic/`, `local.d/gates/`, `local.d/pre-push/`).
+
+### `--with`: opt-in universal scripts
+
+Copy consumer-safe scripts from `bin/hooks-lib/` into the lanes:
+
+```sh
+gitty install-hooks --with em-dashes,clearmeta
+```
+
+| name              | lane          | effect                                    |
+|-------------------|---------------|-------------------------------------------|
+| `em-dashes`       | pre-commit.d  | normalize em-dashes to hyphens            |
+| `python-venv`     | pre-commit.d  | block committing `venv/` / `node_modules/`|
+| `clearmeta`       | pre-commit.d  | strip metadata from committed files       |
+| `drop-eof-newline`| pre-commit.d  | drop whitespace-only diffs                |
+| `health-check`    | pre-push.d    | large-file + embedded-repo scan           |
+
+Maintainer-scoped scripts (identity enforcement, README badges, remote pinning)
+stay in `.hooks/scripts/` in the source repo and are excluded from the npm
+tarball by design.
+
 ## Extending hooks: `.hooks/local.d/` (added v0.6.18)
 
 Repos using `gitty`'s composition runners can extend the hook chain without editing upstream files. The `pre-commit` and `pre-push` runners iterate a consumer namespace after the upstream lane.
