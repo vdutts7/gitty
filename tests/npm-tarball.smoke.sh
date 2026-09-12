@@ -10,7 +10,7 @@ _fail() { echo "🔴 FAIL $1 — $2"; FAIL=$((FAIL+1)); }
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$REPO_ROOT"
-out=$(npm pack --dry-run 2>&1)
+out=$(npm pack --dry-run --json 2>&1)
 
 _has() { grep -q -- "$1" <<<"$out"; }
 

@@ -261,22 +261,76 @@ gitty_park_conflict() {
   echo "     Resolve manually; local branch untouched; nothing lost."
 }
 
-# git-crypt merge bypass: merge's internal stash runs the clean filter on every
-# dirty file. If any filter invocation fails (phantom-dirty from cross-host
-# decrypt), git aborts with "fatal: stash failed". Use git -c per-invocation
-# overrides so .git/config is never mutated (SIGKILL-safe).
-_gitty_crypt_merge() {
-  local _crypt_clean
-  _crypt_clean=$(git config --get filter.git-crypt.clean 2>/dev/null) || true
-  if [[ -n "$_crypt_clean" && "$_crypt_clean" != "cat" ]]; then
-    git -c filter.git-crypt.clean=cat -c filter.git-crypt.required=false "$@"
-  else
-    git "$@"
+gitty_merge_without_internal_stash() {
+  local target_sha="$1" target_ref="$2" msg="$3"
+  local head_before merge_output tree merge_commit gd msg_file tmp_index
+  local -a changed_paths=()
+  head_before=$(git rev-parse HEAD) || return 2
+  merge_output=$(git merge-tree --write-tree --messages "$head_before" "$target_sha" 2>&1)
+  local merge_tree_rc=$?
+  if (( merge_tree_rc == 1 )); then
+    return 1
+  elif (( merge_tree_rc != 0 )); then
+    print -r -- "$merge_output" >&2
+    return 2
   fi
+  tree="${merge_output%%$'\n'*}"
+  git cat-file -e "$tree^{tree}" 2>/dev/null || {
+    print -u2 "🔴 - Additive integrate fallback did not produce a tree."
+    print -r -- "$merge_output" >&2
+    return 2
+  }
+  while IFS= read -r -d '' p; do changed_paths+=("$p"); done \
+    < <(git diff --name-only -z "$head_before" "$tree")
+  local p
+  for p in "${changed_paths[@]}"; do
+    if ! git diff --quiet -- "$p" \
+       || ! git diff --cached --quiet HEAD -- "$p"; then
+      print -u2 "🔴 - Additive integrate fallback blocked by local changes: $p"
+      return 2
+    fi
+  done
+  gd=$(git rev-parse --git-dir) || return 2
+  msg_file=$(mktemp "${TMPDIR:-/tmp}/gitty-merge-msg.XXXXXX")
+  tmp_index=$(mktemp "${TMPDIR:-/tmp}/gitty-merge-index.XXXXXX")
+  rm -f "$tmp_index"
+  print -r -- "Merge $target_ref
+
+$msg" >"$msg_file"
+  GIT_INDEX_FILE="$tmp_index" git read-tree "$tree" || {
+    rm -f "$msg_file" "$tmp_index"
+    return 2
+  }
+  GIT_INDEX_FILE="$tmp_index" git hook run --ignore-missing pre-merge-commit || {
+    rm -f "$msg_file" "$tmp_index"
+    return 2
+  }
+  GIT_INDEX_FILE="$tmp_index" git hook run --ignore-missing commit-msg -- "$msg_file" || {
+    rm -f "$msg_file" "$tmp_index"
+    return 2
+  }
+  merge_commit=$(git commit-tree "$tree" -p "$head_before" -p "$target_sha" <"$msg_file") || {
+    rm -f "$msg_file" "$tmp_index"
+    return 2
+  }
+  rm -f "$msg_file" "$tmp_index"
+  if (( ${#changed_paths[@]} > 0 )); then
+    git restore --source="$merge_commit" --staged --worktree -- "${changed_paths[@]}" || return 2
+  fi
+  if ! git update-ref -m "merge $target_ref" HEAD "$merge_commit" "$head_before"; then
+    if (( ${#changed_paths[@]} > 0 )); then
+      git restore --source="$head_before" --staged --worktree -- "${changed_paths[@]}" || true
+    fi
+    return 2
+  fi
+  git update-ref ORIG_HEAD "$head_before" || true
+  git hook run --ignore-missing post-merge -- 0 || true
+  echo "🟢 - Additive integrate: merged without Git internal stash [$head_before -> $merge_commit]"
+  return 0
 }
 
 # additive_git_integrate: doctrinal sync of origin/$branch into HEAD.
-# Returns 0 = merged (or already present), 1 = parked/stopped.
+# Returns 0 = merged (or already present), 1 = parked conflict, 2 = merge error.
 gitty_additive_integrate() {
   local branch="$1" msg="$2"
   local target_ref="origin/$branch"
@@ -288,22 +342,39 @@ gitty_additive_integrate() {
   fi
   # Prefer ff-only: no merge commit, preserves dirty index (disjoint files),
   # and matches the stale-base hook's own prescribed fix.
-  # Use _gitty_crypt_merge to bypass git-crypt filter if needed (SIGKILL-safe).
-  if _gitty_crypt_merge merge --ff-only --no-edit "$target_sha" >/dev/null 2>&1; then
+  # Keep filters active so decrypted worktree files compare correctly to the index.
+  if git merge --ff-only --no-edit "$target_sha" >/dev/null 2>&1; then
     head_after=$(git rev-parse HEAD 2>/dev/null)
     echo "🟢 - Additive integrate (ff): $target_ref ($target_sha) [$head_before -> $head_after]"
     return 0
   fi
-  gitty_load_additive_resolvers "$root_dir/.gitty/additive-resolvers.yaml"
   gitty_safe_snapshot "pre-integrate"
-  local merge_rc
-  _gitty_crypt_merge merge --no-ff --no-edit "$target_sha" >/dev/null 2>&1
-  merge_rc=$?
-  if (( merge_rc == 0 )); then
+  local merge_output
+  if merge_output=$(git merge --no-ff --no-edit "$target_sha" 2>&1); then
     head_after=$(git rev-parse HEAD 2>/dev/null)
     echo "🟢 - Additive integrate: merged $target_ref ($target_sha) [$head_before -> $head_after]"
     return 0
   fi
+  if [[ "$merge_output" == *"stash failed"* ]] \
+     && ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    gitty_merge_without_internal_stash "$target_sha" "$target_ref" "$msg"
+    local fallback_rc=$?
+    if (( fallback_rc == 0 )); then
+      return 0
+    elif (( fallback_rc == 1 )); then
+      gitty_park_conflict "$target_sha"
+      return 1
+    fi
+    echo "🔴 - Additive integrate fallback failed for $target_ref." >&2
+    return 2
+  fi
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
+     || [[ -z "$(git ls-files -u)" ]]; then
+    echo "🔴 - Additive integrate failed for $target_ref; stopping without parking." >&2
+    print -r -- "$merge_output" >&2
+    return 2
+  fi
+  gitty_load_additive_resolvers "$root_dir/.gitty/additive-resolvers.yaml"
   local resolver_rc
   gitty_apply_additive_resolvers
   resolver_rc=$?
@@ -312,10 +383,10 @@ gitty_additive_integrate() {
 
   if (( resolver_rc == 0 )); then
     # All conflicts resolved - commit the merge
-    if gitty_merge_commit --no-edit -m "$msg
+    if merge_output=$(gitty_merge_commit --no-edit -m "$msg
 
 additive-git: permitted_additive_resolvers
-$audit_body" >/dev/null 2>&1; then
+$audit_body" 2>&1); then
       head_after=$(git rev-parse HEAD 2>/dev/null)
       echo "🟢 - Additive integrate: merged via resolvers [$head_before -> $head_after]"
       rm -f /tmp/gitty-resolver-audit-$$.log
@@ -335,10 +406,10 @@ $audit_body" >/dev/null 2>&1; then
         git checkout --ours -- "$p" 2>/dev/null || true
         git add -- "$p" 2>/dev/null || true
       done
-      if gitty_merge_commit --no-edit -m "$msg
+      if merge_output=$(gitty_merge_commit --no-edit -m "$msg
 
 additive-git: partial drip-through (${#still_unmerged[@]} path(s) held back)
-$audit_body" >/dev/null 2>&1; then
+$audit_body" 2>&1); then
         head_after=$(git rev-parse HEAD 2>/dev/null)
         echo "🟢 - Additive integrate (partial): merged resolved subset [$head_before -> $head_after]"
         echo "🟡 - ${#still_unmerged[@]} path(s) held back - resolve manually on next commit"
@@ -349,6 +420,11 @@ $audit_body" >/dev/null 2>&1; then
   fi
 
   rm -f /tmp/gitty-resolver-audit-$$.log
+  if [[ -z "$(git ls-files -u)" ]]; then
+    echo "🔴 - Additive integrate failed for $target_ref; stopping without parking." >&2
+    print -r -- "$merge_output" >&2
+    return 2
+  fi
   gitty_park_conflict "$target_sha"
   return 1
 }
@@ -983,9 +1059,12 @@ else
           echo "🟢 - Autohealed stale-base via additive integrate"
         fi
       fi
-    else
+    elif (( ai_rc == 1 )); then
       echo "🔴 - Additive integrate parked; local branch untouched." >&2
       echo "     See bak/pending-merge-*  +  remote-snapshot/*  for both sides." >&2
+    else
+      cd "$original_dir"
+      exit "$ai_rc"
     fi
   fi
 
@@ -1119,10 +1198,14 @@ while true; do
     if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
       echo "🟡 - Additive-integrating origin/$branch..."
       gitty_additive_integrate "$branch" "$commit_mssg"
-      if (( $? != 0 )); then
+      ai_rc=$?
+      if (( ai_rc == 1 )); then
         push_output="integrate parked"
         push_status=1
         integrate_parked=true
+      elif (( ai_rc != 0 )); then
+        cd "$original_dir"
+        exit "$ai_rc"
       fi
     fi
 
@@ -1139,10 +1222,14 @@ while true; do
         echo "🟡 - Push rejected; re-integrating and retrying..."
         git fetch origin "$branch" 2>/dev/null || true
         gitty_additive_integrate "$branch" "$commit_mssg"
-        if (( $? != 0 )); then
+        ai_rc=$?
+        if (( ai_rc == 1 )); then
           push_output="integrate parked"
           push_status=1
           integrate_parked=true
+        elif (( ai_rc != 0 )); then
+          cd "$original_dir"
+          exit "$ai_rc"
         else
           push_output=$(git push origin "$branch" 2>&1)
           push_status=$?

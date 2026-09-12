@@ -293,6 +293,11 @@ gitty -v
 
 `GITTY_PARTIAL=1` default. Park-only: `GITTY_PARTIAL=0`. Bulldoze: `GITTY_FORCE=1`.
 
+Integration preserves configured Git clean/smudge filters. If Git's internal
+merge snapshot fails on a filtered worktree, gitty computes the clean merge
+tree from Git objects, runs merge hooks against that tree, and restores only
+incoming paths after proving they do not overlap local worktree changes.
+
 Holdback reasons:
 
 - optional `.gitty/holdback-reasons.json` or `GITTY_HOLDBACK_CATALOG`
@@ -326,8 +331,12 @@ gittyunion install
 | `[CODE] reason` | catalog match for pre-commit reject (else offender stderr line) |
 | elimination scan | hook blocked commit; drip retries without each staged path |
 | park | nothing could land; `bak/pending-merge-*` + `remote-snapshot-*` |
+| merge error | original Git diagnostic; exit 2; no conflict parking |
 
 Local branch stays put on park. Nothing lost.
+
+Other merge or merge-commit failures stop with exit 2 rather than masquerading
+as parked conflicts. Any in-progress merge is left in place for manual recovery.
 
 ## Gotchas
 
@@ -344,6 +353,12 @@ Local branch stays put on park. Nothing lost.
 | fresh clone drops union driver | re-run `gittyunion install` | stable | attrs alone insufficient |
 | nothing can land | park `bak/pending-merge-*` | stable | first-class ref; nothing lost; non-fatal |
 | foreign-owned `.git` (old `sudo git`) | `sudo chown -R "$(whoami)" .git` | stable | fail-fast; `GITTY_SKIP_PERM_CHECK=1` opt out |
+
+## Regression tests
+
+`npm run test:integrate` (also included in `npm test`) requires Git, zsh, and
+git-crypt. It exercises integration using disposable local repositories and
+local remotes only.
 
 ## Docs
 
