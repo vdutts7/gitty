@@ -282,6 +282,7 @@ semantic_union:
 | A | `gitty` | drip + holdback checkpoint on remote |
 | B | `gittysnap` | snapshot-first solo sync |
 | C | `gittyunion install` | NDJSON union merge driver |
+| D | `gitty-dispatch` | config-driven Git operation routing |
 
 ### Path A · `gitty`
 
@@ -321,6 +322,44 @@ gittysnap
 # union + dedupe + stable-sort for .ndjson / .jsonl
 gittyunion install
 ```
+
+### Path D · `gitty-dispatch`
+
+```bash
+gitty-dispatch --config /absolute/path/dispatch.json --require-match -- push origin main
+```
+
+Configuration supplies policy; the binary supplies exact dispatch:
+
+```json
+{
+  "dispatch": {"version": 1, "real_git": "/usr/bin/git"},
+  "guarded_repos": [{
+    "match": {"remote_urls": ["https://example.invalid/team/repo.git"]},
+    "dispatch": {
+      "mode": "redirect",
+      "intercept_ops": ["push"],
+      "passthrough_ops": ["status", "log", "diff"],
+      "driver_argv": ["/absolute/path/sync-driver", "{repo_root}", "{operation}"],
+      "authorized_ancestor": "/absolute/path/sync-driver"
+    }
+  }]
+}
+```
+
+The driver runs when an intercepted operation has no exact canonical driver in
+its process ancestry. Descendant Git calls pass through. Environment markers,
+substrings, basenames, and shell evaluation never authorize a request. Rules,
+driver paths, and intercepted operations remain consumer-owned configuration.
+Driver paths may be absolute or start with `{config_dir}/`; both are
+canonicalized before comparison. Use the standalone `{git_args}` element when a
+driver needs the original Git argument vector. Git, Zsh, and jq are required.
+Linux supports whitespace in driver paths; macOS ancestry verification fails
+closed for such paths because `ps` does not expose exact argument boundaries.
+Matched repositories are default-deny: every literal Git operation belongs in
+either `intercept_ops` or `passthrough_ops`. Configuration and configured
+executables are trusted inputs; process ancestry prevents accidental or agentic
+route-around, not attacks by another process already running as the same user.
 
 ## Output
 
