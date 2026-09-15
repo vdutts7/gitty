@@ -315,4 +315,50 @@ HOOK
   _pass "$resolution resolver commit errors preserve in-progress state"
 done
 
+# ---------------------------------------------------------------------------
+# Regression: gitty_merge_without_internal_stash must feed pathspecs to
+# `git restore` via NUL stdin, not argv. A large integrate (tens of thousands
+# of changed paths) overflows ARG_MAX and aborts the fallback with E2BIG
+# ("argument list too long: git"). A `git` shim simulates the kernel argument
+# limit at small N so the guard stays deterministic without materializing a
+# 50k-file fixture: it rejects a `restore` that carries pathspecs in argv but
+# lets the NUL-stdin form (--pathspec-from-file) through.
+# ---------------------------------------------------------------------------
+_new_case fallback-arg-max encrypted
+mkdir -p "$PEER/host-b/bulk"
+typeset -i _i
+for _i in {1..120}; do
+  printf 'remote-%d\n' "$_i" > "$PEER/host-b/bulk/file-$(printf '%04d' "$_i").txt"
+done
+"$GIT" -C "$PEER" add -A
+"$GIT" -C "$PEER" commit -qm remote-bulk
+"$GIT" -C "$PEER" push -q origin main
+REMOTE_TIP=$("$GIT" -C "$PEER" rev-parse HEAD)
+_local_update   # disjoint local commit -> forces the two-parent fallback
+
+typeset _shimdir="$CASE/shim"
+mkdir -p "$_shimdir"
+cat > "$_shimdir/git" <<SHIM
+#!/usr/bin/env zsh
+_real="$GIT"
+# Police only the restore verb; simulate execve E2BIG when pathspecs ride in
+# argv over the cap. The NUL-stdin form keeps argv tiny and is exempt.
+if [[ " \$* " == *" restore "* && " \$* " != *"--pathspec-from-file"* ]]; then
+  typeset _all="\$*"
+  (( \${#_all} > 512 )) && { print -u2 "argument list too long: git"; exit 1; }
+fi
+exec "\$_real" "\$@"
+SHIM
+chmod +x "$_shimdir/git"
+
+RC=0
+OUTPUT=$(cd "$WORK" && PATH="$_shimdir:$PATH" GITTY_ENV="" GITTY_FORCE=0 GITTY_PARTIAL=0 \
+  GITTY_NO_STALE_BASE_HEAL=0 GITTY_PUSH_RETRIES=0 \
+  zsh "$GITTY_SCRIPT" "additive integration regression" "$WORK" 2>&1) || RC=$?
+_assert_synced "host-b/bulk/file-0001.txt" "remote-1"
+_assert "fallback used the NUL-stdin restore" grep -q 'without Git internal stash' <<< "$OUTPUT"
+_assert "every bulk path integrated" \
+  test "$("$GIT" -C "$WORK" ls-files 'host-b/bulk' | wc -l | tr -d ' ')" -eq 120
+_pass "fallback restores large changed set without ARG_MAX overflow"
+
 print -- "additive integration smoke: $PASS passed"

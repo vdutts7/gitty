@@ -314,12 +314,20 @@ $msg" >"$msg_file"
     return 2
   }
   rm -f "$msg_file" "$tmp_index"
+  # Feed pathspecs via NUL stdin, never argv: a large integrate (tens of
+  # thousands of changed paths) overflows ARG_MAX and aborts with E2BIG
+  # ("argument list too long: git"). changed_paths was read NUL-safe above,
+  # so --pathspec-file-nul round-trips any path byte-for-byte.
   if (( ${#changed_paths[@]} > 0 )); then
-    git restore --source="$merge_commit" --staged --worktree -- "${changed_paths[@]}" || return 2
+    printf '%s\0' "${changed_paths[@]}" \
+      | git restore --source="$merge_commit" --staged --worktree \
+          --pathspec-from-file=- --pathspec-file-nul || return 2
   fi
   if ! git update-ref -m "merge $target_ref" HEAD "$merge_commit" "$head_before"; then
     if (( ${#changed_paths[@]} > 0 )); then
-      git restore --source="$head_before" --staged --worktree -- "${changed_paths[@]}" || true
+      printf '%s\0' "${changed_paths[@]}" \
+        | git restore --source="$head_before" --staged --worktree \
+            --pathspec-from-file=- --pathspec-file-nul || true
     fi
     return 2
   fi
