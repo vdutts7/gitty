@@ -151,4 +151,35 @@ while IFS= read -r -d '' _captured; do CAPTURED+=("$_captured"); done < "$GITTY_
 [[ "${(j:|:)CAPTURED}" == "-C|$REPO|push|--dry-run|ref with spaces" ]]
 pass original_argv_preserved
 
+# Ancestry that cannot be verified must fail closed (exit 93), never redirect.
+# Force the unknown-platform branch of the ancestry walk via a fake uname.
+mkdir -p "$FIXTURE/fakebin"
+cat > "$FIXTURE/fakebin/uname" <<'UNAME_EOF'
+#!/bin/sh
+echo TestOS
+UNAME_EOF
+chmod +x "$FIXTURE/fakebin/uname"
+expect_rc 93 env PATH="$FIXTURE/fakebin:$PATH" \
+  "$DISPATCH" --config "$CONFIG" --require-match -- -C "$REPO" push origin main
+pass ancestry_unverifiable_fails_closed
+
+# Control characters in trust-boundary config fields must be rejected.
+jq '.dispatch.real_git = "/usr/bin/git\nevil"' "$CONFIG" > "$FIXTURE/newline-git.json"
+expect_rc 93 "$DISPATCH" --config "$FIXTURE/newline-git.json" --require-match -- -C "$REPO" push
+jq '.guarded_repos[0].dispatch.authorized_ancestor = "/tmp/driver\nspoof"' "$CONFIG" > "$FIXTURE/newline-anc.json"
+expect_rc 93 "$DISPATCH" --config "$FIXTURE/newline-anc.json" --require-match -- -C "$REPO" push
+pass control_char_config_field_rejected
+
+# Caller-supplied --config-env cannot be smuggled into a matched repository.
+expect_rc 93 "$DISPATCH" --config "$CONFIG" --require-match -- --config-env FOO=BAR -C "$REPO" push origin main
+pass config_env_rejected_for_matched_repo
+
+# The dispatcher must refuse to authorize itself as the driver (no self-redirect loop).
+jq --arg d "$DISPATCH" '
+  .guarded_repos[0].dispatch.driver_argv = [$d, "{repo_root}", "{operation}"]
+  | .guarded_repos[0].dispatch.authorized_ancestor = $d
+' "$CONFIG" > "$FIXTURE/selfdriver.json"
+expect_rc 93 "$DISPATCH" --config "$FIXTURE/selfdriver.json" --require-match -- -C "$REPO" push origin main
+pass dispatcher_cannot_be_own_driver
+
 print -r -- "git-dispatch smoke: $PASS passed"
