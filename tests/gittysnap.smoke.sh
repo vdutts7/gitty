@@ -113,6 +113,7 @@ fi
 # ---------- 5. reap never eats unmerged work ----------
 "$GIT" merge --no-ff -X ours origin/main -m resolve >/dev/null 2>&1
 "$GIT" branch -f snap/main/local/MERGED HEAD
+typeset merged_snapshot_tip=$("$GIT" rev-parse snap/main/local/MERGED)
 "$GIT" checkout -qb orphan
 print -r -- "unmerged" > only-here.txt
 "$GIT" add -A && "$GIT" commit -qm unmerged >/dev/null 2>&1
@@ -124,10 +125,57 @@ if ! "$GIT" show-ref --verify -q refs/heads/snap/main/local/MERGED; then
 else
   _fail "reap: deletes snapshots already merged" "merged snapshot survived"
 fi
+typeset merged_recovery_tag
+merged_recovery_tag=$("$GIT" tag --list 'recovery/deleted-branches/snap/main/local/MERGED/*-local-*')
+if [[ -n "$merged_recovery_tag" ]] && \
+   [[ "$("$GIT" rev-parse "$merged_recovery_tag^{}")" == "$merged_snapshot_tip" ]]; then
+  _pass "reap: exact merged tip remains recoverable"
+else
+  _fail "reap: exact merged tip remains recoverable" "missing or incorrect recovery tag"
+fi
 if "$GIT" show-ref --verify -q refs/heads/snap/main/local/UNMERGED; then
   _pass "reap: refuses to delete unmerged snapshots"
 else
   _fail "reap: refuses to delete unmerged snapshots" "UNMERGED WAS DELETED (data loss)"
+fi
+
+# ---------- 6. remote divergence preserves both tips before deletion ----------
+"$GIT" branch -f snap/main/local/DIVERGED HEAD
+typeset divergent_local_tip=$("$GIT" rev-parse snap/main/local/DIVERGED)
+"$GIT" push -q origin snap/main/local/DIVERGED
+"$GIT" -C "$WORK/wsl" fetch -q origin refs/heads/snap/main/local/DIVERGED
+"$GIT" -C "$WORK/wsl" checkout -q -B divergent-remote FETCH_HEAD
+print -r -- "remote-only" > "$WORK/wsl/remote-only.txt"
+"$GIT" -C "$WORK/wsl" add remote-only.txt
+"$GIT" -C "$WORK/wsl" commit -qm divergent-remote
+typeset divergent_remote_tip=$("$GIT" -C "$WORK/wsl" rev-parse HEAD)
+"$GIT" -C "$WORK/wsl" push -q origin HEAD:refs/heads/snap/main/local/DIVERGED
+
+GITTYSNAP_KEEP=0 "$SNAP" reap "$WORK/mac" >/dev/null 2>&1
+typeset divergent_local_tag divergent_remote_tag
+divergent_local_tag=$("$GIT" tag --list 'recovery/deleted-branches/snap/main/local/DIVERGED/*-local-*')
+divergent_remote_tag=$("$GIT" tag --list 'recovery/deleted-branches/snap/main/local/DIVERGED/*-remote-*')
+if [[ -n "$divergent_local_tag" && "$("$GIT" rev-parse "$divergent_local_tag^{}")" == "$divergent_local_tip" ]]; then
+  _pass "reap: divergent local tip archived"
+else
+  _fail "reap: divergent local tip archived" "local tip missing"
+fi
+if [[ -n "$divergent_remote_tag" && "$("$GIT" rev-parse "$divergent_remote_tag^{}")" == "$divergent_remote_tip" ]]; then
+  _pass "reap: divergent remote tip archived"
+else
+  _fail "reap: divergent remote tip archived" "remote tip missing"
+fi
+if [[ -z "$("$GIT" ls-remote --heads origin refs/heads/snap/main/local/DIVERGED)" ]] && \
+   [[ -z "$("$GIT" branch --list snap/main/local/DIVERGED)" ]]; then
+  _pass "reap: deletes divergent branch names after archival"
+else
+  _fail "reap: deletes divergent branch names after archival" "branch survived"
+fi
+if [[ -n "$("$GIT" ls-remote --tags origin "refs/tags/$divergent_local_tag")" ]] && \
+   [[ -n "$("$GIT" ls-remote --tags origin "refs/tags/$divergent_remote_tag")" ]]; then
+  _pass "reap: recovery tags persisted off-machine"
+else
+  _fail "reap: recovery tags persisted off-machine" "remote recovery tag missing"
 fi
 
 print -u2 ""

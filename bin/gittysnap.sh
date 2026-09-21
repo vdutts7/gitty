@@ -318,9 +318,77 @@ cmd_list() {
   return 0
 }
 
-# Snapshots are clutter, not debt: once merged they are ancestors of the branch
-# and carry no obligation. But nothing reaps them, so they accumulate forever.
-# Only delete refs proven to be ancestors of HEAD, and only beyond the keep window.
+# Reaping removes branch names, never recoverability. Every distinct local or
+# remote tip is retained under a pushed, verified annotated tag before deletion.
+ensure_recovery_tag() {
+  typeset tag_name="$1" tip_sha="$2" source_kind="$3" source_ref="$4" timestamp="$5"
+  typeset message existing_tip local_tag_object remote_tag_object
+  message="gittysnap-retire/1
+branch: $source_ref
+source: $source_kind
+tip: $tip_sha
+retired_at_utc: $timestamp
+head_at_retirement: $(git rev-parse HEAD)
+restore: git branch '$source_ref' '$tag_name^{}'"
+
+  if git show-ref --verify --quiet "refs/tags/$tag_name"; then
+    existing_tip=$(git rev-parse "$tag_name^{}")
+    [[ "$existing_tip" == "$tip_sha" ]] || {
+      echo "🔴 - Recovery tag collision: $tag_name" >&2
+      return 1
+    }
+  else
+    git tag -a "$tag_name" "$tip_sha" -m "$message" || return 1
+  fi
+
+  if (( HAS_REMOTE )); then
+    git push -q "$REMOTE" "refs/tags/${tag_name}:refs/tags/${tag_name}" || return 1
+    local_tag_object=$(git rev-parse "refs/tags/$tag_name")
+    remote_tag_object=$(git ls-remote "$REMOTE" "refs/tags/$tag_name" | awk 'NR == 1 { print $1 }')
+    [[ "$remote_tag_object" == "$local_tag_object" ]] || {
+      echo "🔴 - Remote recovery tag verification failed: $tag_name" >&2
+      return 1
+    }
+  fi
+}
+
+retire_snapshot_ref() {
+  typeset ref="$1" local_tip remote_tip="" timestamp local_tag remote_tag
+  local_tip=$(git rev-parse --verify "refs/heads/$ref^{commit}") || return 1
+  timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+  local_tag="recovery/deleted-branches/$ref/${timestamp}-local-${local_tip[1,12]}"
+  ensure_recovery_tag "$local_tag" "$local_tip" "local" "$ref" "$timestamp" || return 1
+
+  if (( HAS_REMOTE )); then
+    remote_tip=$(git ls-remote --heads "$REMOTE" "refs/heads/$ref" 2>/dev/null | awk 'NR == 1 { print $1 }')
+    if [[ -n "$remote_tip" && "$remote_tip" != "$local_tip" ]]; then
+      if ! git cat-file -e "$remote_tip^{commit}" 2>/dev/null; then
+        git fetch -q --no-tags "$REMOTE" "refs/heads/$ref" || return 1
+        [[ "$(git rev-parse FETCH_HEAD)" == "$remote_tip" ]] || {
+          echo "🔴 - Remote tip changed while archiving $REMOTE/$ref" >&2
+          return 1
+        }
+      fi
+      remote_tag="recovery/deleted-branches/$ref/${timestamp}-remote-${remote_tip[1,12]}"
+      ensure_recovery_tag "$remote_tag" "$remote_tip" "remote:$REMOTE" "$ref" "$timestamp" || return 1
+    fi
+  fi
+
+  git branch -D -- "$ref" >/dev/null || return 1
+  if [[ -n "$remote_tip" ]]; then
+    if ! git push -q --force-with-lease="refs/heads/$ref:$remote_tip" "$REMOTE" ":refs/heads/$ref"; then
+      git branch "$ref" "$local_tip" >/dev/null 2>&1 || true
+      echo "🔴 - Remote deletion raced or failed; restored local branch: $ref" >&2
+      return 1
+    fi
+  fi
+
+  echo "   🗑️  $ref"
+  echo "   🛟  $local_tag"
+  [[ -n "$remote_tag" ]] && echo "   🛟  $remote_tag"
+}
+
+# Only retire refs proven to be ancestors of HEAD and beyond the keep window.
 cmd_reap() {
   typeset -a merged=()
   typeset ref
@@ -337,10 +405,10 @@ cmd_reap() {
   typeset -a doomed=("${merged[@]:$KEEP}")
   echo "🟡 - Reaping ${#doomed[@]} merged snapshot(s) (keeping $KEEP most recent)..."
   for ref in "${doomed[@]}"; do
-    git branch -D "$ref" >/dev/null 2>&1 && echo "   🗑️  $ref"
-    # The documented cleanup path only ever removed the local ref, quietly
-    # leaving the remote copy behind forever. Delete both.
-    (( HAS_REMOTE )) && git push -q "$REMOTE" --delete "$ref" 2>/dev/null && echo "   🗑️  $REMOTE/$ref"
+    retire_snapshot_ref "$ref" || {
+      echo "🔴 - Reap stopped; branch remains recoverable: $ref" >&2
+      return 1
+    }
   done
   echo "🟢 - Reap complete"
   return 0
