@@ -142,7 +142,7 @@ flowchart LR
 
 - rest of the staged tree was fine
 
-- drip: eliminate the offender, land the rest, hold with a specific reason
+- drip: hook reports offender via `GITTY_HOLDBACK`; one retry lands the rest; hold with a specific reason
 
 ### ❌ Append ledger false conflicts
 
@@ -393,7 +393,7 @@ route-around, not attacks by another process already running as the same user.
 | partial integrate | resolved subset committed; held paths stay local |
 | holdback | oversized / submodule / push-reject / hook-reject left unstaged |
 | `[CODE] reason` | catalog match for pre-commit reject (else offender stderr line) |
-| elimination scan | hook blocked commit; drip retries without each staged path |
+| drip retry | hook emitted `GITTY_HOLDBACK` records; one aggregate unstage; one bounded commit retry |
 | plunge | oversized blob was buried in local-only history; original tip trapped, clean range rebuilt |
 | park | nothing could land; `bak/pending-merge-*` + `remote-snapshot-*` |
 | merge error | original Git diagnostic; exit 2; no conflict parking |
@@ -410,7 +410,7 @@ as parked conflicts. Any in-progress merge is left in place for manual recovery.
 | one unresolvable file parks whole merge | drip (`GITTY_PARTIAL=1`): commit resolved subset | stable | backup as much as possible |
 | oversized path blocks push | leave `GITTY_PARTIAL=1` | stable | hold back; push the rest |
 | oversized blob is buried in older unpushed commits | `gittyplunger scan`; plain `gitty` auto-plunges linear ranges | stable | trap original tip; rebuild only local-only history |
-| pre-commit rejects one staged path | leave `GITTY_PARTIAL=1`; elimination drip holds that path | stable | clean subset still lands |
+| pre-commit rejects one staged path | hook emits `GITTY_HOLDBACK` records; one aggregate retry holds offenders | stable | clean subset still lands; opaque hooks halt without scan |
 | mute `pre-commit hook rejection` reason | `.gitty/holdback-reasons.json` or `GITTY_HOLDBACK_CATALOG` | stable | stable `[CODE]` + fix hint |
 | remote ahead / stale-base guard | leave autoheal on; `GITTY_NO_STALE_BASE_HEAL=1` to skip | stable | fetch+rebase then retry |
 | N-commit rebase replays same conflict N times | `merge --ff-only` then `--no-ff` once | stable | one merge, one conflict set |
