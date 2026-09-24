@@ -9,6 +9,7 @@ Process env only by default. Optional: set `GITTY_ENV` to a file path to `source
 | `GITTY_PARTIAL` | `1` | `0` = disable partial holdback (all-or-nothing) |
 | `GITTY_MAX_FILE_BYTES` | `104857600` (100 MiB) | pre-commit size threshold for holdback |
 | `GITTY_PUSH_RETRIES` | `8` | max push→holdback→recommit cycles |
+| `GITTY_PLUNGER` | `1` | repair oversized blobs buried in linear unpushed history before push; `0` disables |
 | `GITTY_FORCE` | unset | `1` = bulldoze `push -f` (solo escape hatch) |
 | `GITTY_HOLDBACK_CATALOG` | unset | path to holdback-reasons.json (else `<repo>/.gitty/holdback-reasons.json`) |
 | `GITTY_NO_STALE_BASE_HEAL` | unset | `1` = skip stale-base autoheal |

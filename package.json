@@ -1,7 +1,7 @@
 {
   "name": "@vd7/gitty",
-  "version": "0.7.5",
-  "description": "snapshot checkpoint CLI: gitty + gittysnap + gittyunion (content first)",
+  "version": "0.8.0",
+  "description": "snapshot checkpoint CLI with drip, snapshots, unions, and outgoing-history repair",
   "bin": {
     "gitty": "bin/gitty.sh",
     "gittylfs": "bin/gittylfs.sh",
@@ -9,6 +9,7 @@
     "gittyhealth": "bin/gittyhealth.sh",
     "gittyunion": "bin/gittyunion.sh",
     "gittysnap": "bin/gittysnap.sh",
+    "gittyplunger": "bin/gittyplunger.py",
     "gitty-dispatch": "bin/gitty-dispatch.sh"
   },
   "files": [
@@ -16,13 +17,14 @@
     "bin"
   ],
   "scripts": {
-    "test": "zsh tests/git-dispatch.smoke.sh && zsh tests/hook-extension.smoke.sh && zsh tests/hook-extension-prepush.smoke.sh && zsh tests/hook-extension-edge.smoke.sh && zsh tests/install-hooks.smoke.sh && bash tests/install-hooks.unit.sh && bash tests/npm-tarball.smoke.sh && bash tests/drip-parser.regression.sh && zsh tests/drip-targeted-retry.smoke.sh && zsh tests/additive-integrate.smoke.sh && zsh tests/runner-shape.regression.sh && bash tests/handoff-md.regression.sh && bin/gitty.sh --help",
+    "test": "zsh tests/git-dispatch.smoke.sh && zsh tests/hook-extension.smoke.sh && zsh tests/hook-extension-prepush.smoke.sh && zsh tests/hook-extension-edge.smoke.sh && zsh tests/install-hooks.smoke.sh && bash tests/install-hooks.unit.sh && bash tests/npm-tarball.smoke.sh && bash tests/drip-parser.regression.sh && zsh tests/drip-targeted-retry.smoke.sh && zsh tests/additive-integrate.smoke.sh && bash tests/plunger.smoke.sh && zsh tests/runner-shape.regression.sh && bash tests/handoff-md.regression.sh && bin/gitty.sh --help",
     "test:dispatch": "zsh tests/git-dispatch.smoke.sh",
     "test:readme-badges": "zsh tests/readme-contact-badges.smoke.sh",
     "test:partial": "zsh tests/partial-commit.smoke.sh",
     "test:integrate": "zsh tests/additive-integrate.smoke.sh",
     "test:union": "zsh tests/ndjson-union.smoke.sh",
     "test:snap": "zsh tests/gittysnap.smoke.sh",
+    "test:plunger": "bash tests/plunger.smoke.sh",
     "test:hook-extension": "zsh tests/hook-extension.smoke.sh",
     "test:readme": "zsh tests/readme-contact-badges.smoke.sh",
     "test:install-hooks": "zsh tests/install-hooks.smoke.sh",

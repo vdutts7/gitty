@@ -6,8 +6,9 @@
 |---|---|
 | [commands.md](commands.md) | all bins |
 | [gittysnap.md](gittysnap.md) | snapshot-first multi-machine sync |
+| [gittyplunger.md](gittyplunger.md) | buried oversized-blob repair |
 | [gittyunion.md](gittyunion.md) | NDJSON/JSONL union merge driver |
-| [partial-commit.md](partial-commit.md) | holdback + drip-through |
+| [partial-commit.md](partial-commit.md) | holdback, drip-through, and buried-clog repair |
 | [environment.md](environment.md) | env vars |
 | [hooks.md](hooks.md) | `.hooks/` vs npm-only |
 
@@ -26,5 +27,6 @@ gitty "checkpoint" /absolute/path/to/repo
 | Large binaries | `gittylfs` |
 | Dirty submodules | `gittyembedded` |
 | Inspect only | `gittyhealth` |
+| Oversized blobs buried in unpushed history | `gittyplunger` |
 | Solo laptop↔desktop | `gittysnap` |
 | Append-only `.ndjson`/`.jsonl` | `gittyunion install` |

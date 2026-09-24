@@ -71,6 +71,25 @@ Canonical test: `tests/holdback-reason.smoke.sh`
 
 Retries: `GITTY_PUSH_RETRIES` (default `8`).
 
+## Buried outgoing-history clogs
+
+Drip handles current staged paths and the commit Gitty just created.
+`gittyplunger` handles the older case: an oversized blob already exists in one
+or more commits reachable from local `HEAD` but not from upstream.
+
+The first repair leg is intentionally narrow:
+
+- upstream must be an ancestor of `HEAD`
+- the unpushed range must be linear
+- published history is never rewritten
+- signed commits fail closed in v1
+- the original tip is retained under `refs/gitty/plunger/traps/`
+- only clog paths may differ between the original and rebuilt tips
+- no push occurs inside `gittyplunger`
+
+Plain `gitty` runs this check after fetch and before push. Disable automatic
+repair with `GITTY_PLUNGER=0`.
+
 ## Canonical test
 
 - run: `tests/partial-commit.smoke.sh`

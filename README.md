@@ -234,6 +234,19 @@ alt="snap"
 <tr>
 <td align="left">
 <img
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583"
+width="40"
+height="40"
+alt="plunger"
+/>
+</td>
+<td align="left"><code>gittyplunger</code></td>
+<td align="left">trap -> rebuild unpushed range -> hold clog</td>
+<td align="left">buried oversized blobs</td>
+</tr>
+<tr>
+<td align="left">
+<img
 src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/json.webp?v=1787107583"
 width="40"
 height="40"
@@ -283,6 +296,7 @@ semantic_union:
 | B | `gittysnap` | snapshot-first solo sync |
 | C | `gittyunion install` | NDJSON union merge driver |
 | D | `gitty-dispatch` | config-driven Git operation routing |
+| E | `gittyplunger scan` | inspect oversized blobs buried in unpushed history |
 
 ### Path A · `gitty`
 
@@ -347,6 +361,17 @@ Configuration supplies policy; the binary supplies exact dispatch:
 }
 ```
 
+### Path E · `gittyplunger`
+
+```bash
+gittyplunger scan
+gittyplunger plunge --yes
+```
+
+`scan` is read-only. `plunge` repairs only a linear local-only range, preserves
+the original tip under `refs/gitty/plunger/traps/`, and leaves clog bytes local.
+Plain `gitty` runs this repair automatically before push.
+
 The driver runs when an intercepted operation has no exact canonical driver in
 its process ancestry. Descendant Git calls pass through. Environment markers,
 substrings, basenames, and shell evaluation never authorize a request. Rules,
@@ -369,6 +394,7 @@ route-around, not attacks by another process already running as the same user.
 | holdback | oversized / submodule / push-reject / hook-reject left unstaged |
 | `[CODE] reason` | catalog match for pre-commit reject (else offender stderr line) |
 | elimination scan | hook blocked commit; drip retries without each staged path |
+| plunge | oversized blob was buried in local-only history; original tip trapped, clean range rebuilt |
 | park | nothing could land; `bak/pending-merge-*` + `remote-snapshot-*` |
 | merge error | original Git diagnostic; exit 2; no conflict parking |
 
@@ -383,6 +409,7 @@ as parked conflicts. Any in-progress merge is left in place for manual recovery.
 |---|---|---|---|
 | one unresolvable file parks whole merge | drip (`GITTY_PARTIAL=1`): commit resolved subset | stable | backup as much as possible |
 | oversized path blocks push | leave `GITTY_PARTIAL=1` | stable | hold back; push the rest |
+| oversized blob is buried in older unpushed commits | `gittyplunger scan`; plain `gitty` auto-plunges linear ranges | stable | trap original tip; rebuild only local-only history |
 | pre-commit rejects one staged path | leave `GITTY_PARTIAL=1`; elimination drip holds that path | stable | clean subset still lands |
 | mute `pre-commit hook rejection` reason | `.gitty/holdback-reasons.json` or `GITTY_HOLDBACK_CATALOG` | stable | stable `[CODE]` + fix hint |
 | remote ahead / stale-base guard | leave autoheal on; `GITTY_NO_STALE_BASE_HEAL=1` to skip | stable | fetch+rebase then retry |
@@ -406,6 +433,7 @@ local remotes only.
 | [`docs/README`](docs/README%2Emd) | index |
 | [`docs/commands`](docs/commands%2Emd) | all bins |
 | [`docs/gittysnap`](docs/gittysnap%2Emd) | snapshot-first sync |
+| [`docs/gittyplunger`](docs/gittyplunger%2Emd) | buried oversized-blob repair |
 | [`docs/gittyunion`](docs/gittyunion%2Emd) | NDJSON union driver |
 | [`docs/partial-commit`](docs/partial-commit%2Emd) | holdback + drip |
 | [`docs/environment`](docs/environment%2Emd) | env |

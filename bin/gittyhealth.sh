@@ -192,6 +192,16 @@ if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
     echo "⚠️  $unpushed commit(s) exist only on this machine (unpushed)"
     echo "   fix: gittysnap sync"
     issues=$((issues + 1))
+    plunger="${0:A:h}/gittyplunger.py"
+    if [[ -x "$plunger" ]] && command -v python3 >/dev/null 2>&1; then
+      plunger_json="$(python3 "$plunger" scan "$root_dir" --json 2>/dev/null || true)"
+      clog_count="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("clog_path_count",0))' <<<"$plunger_json" 2>/dev/null || echo 0)"
+      if [[ "$clog_count" -gt 0 ]]; then
+        echo "   🪠 $clog_count buried oversized path(s) block the outgoing pipe"
+        echo "      fix: gittyplunger plunge \"$root_dir\" --yes"
+        issues=$((issues + 1))
+      fi
+    fi
   fi
 fi
 

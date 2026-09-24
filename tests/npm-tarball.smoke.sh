@@ -22,6 +22,7 @@ _has() { jq -e --arg path "$1" '.[0].files | any(.path == $path)' "$TMP/dry-run.
 
 _has 'bin/init-hooks.sh'                && _pass "ships bin/init-hooks.sh"          || _fail "bin/init-hooks.sh" "missing"
 _has 'bin/gitty-dispatch.sh'            && _pass "ships bin/gitty-dispatch.sh"      || _fail "bin/gitty-dispatch.sh" "missing"
+_has 'bin/gittyplunger.py'              && _pass "ships bin/gittyplunger.py"        || _fail "bin/gittyplunger.py" "missing"
 _has 'bin/hooks-lib/clearmeta.sh'       && _pass "ships bin/hooks-lib/clearmeta.sh" || _fail "clearmeta.sh" "missing"
 _has 'bin/hooks-lib/check-em-dashes.sh' && _pass "ships check-em-dashes.sh"         || _fail "check-em-dashes.sh" "missing"
 _has 'bin/hooks-lib/README.md'          && _pass "ships hooks-lib README"           || _fail "hooks-lib README" "missing"
@@ -59,6 +60,16 @@ if npm pack --json --pack-destination "$TMP" > "$TMP/pack.json" 2> "$TMP/pack.er
       _pass "packed dispatcher runs"
     else
       _fail "packed dispatcher runs" "help invocation failed"
+    fi
+    if [[ -x "$TMP/extracted/package/bin/gittyplunger.py" ]]; then
+      _pass "packed plunger executable"
+    else
+      _fail "packed plunger executable" "mode is not executable"
+    fi
+    if "$TMP/extracted/package/bin/gittyplunger.py" --help >/dev/null; then
+      _pass "packed plunger runs"
+    else
+      _fail "packed plunger runs" "help invocation failed"
     fi
   else
     _fail "creates actual tarball" "reported tarball missing"

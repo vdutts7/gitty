@@ -17,6 +17,7 @@ typeset -r _GITTY_ROOT="${0:A:h:h}"
 # Preserve CLI env overrides across optional GITTY_ENV source
 _gitty_partial_cli=${GITTY_PARTIAL-}
 _gitty_max_cli=${GITTY_MAX_FILE_BYTES-}
+_gitty_plunger_cli=${GITTY_PLUNGER-}
 
 # ---------- Load environment (opt-in via GITTY_ENV only) ----------
 if [[ -n "${GITTY_ENV:-}" && -f "$GITTY_ENV" ]]; then
@@ -26,7 +27,9 @@ fi
 
 [[ -n "$_gitty_partial_cli" ]] && GITTY_PARTIAL="$_gitty_partial_cli"
 [[ -n "$_gitty_max_cli" ]] && GITTY_MAX_FILE_BYTES="$_gitty_max_cli"
+[[ -n "$_gitty_plunger_cli" ]] && GITTY_PLUNGER="$_gitty_plunger_cli"
 GITTY_PARTIAL=${GITTY_PARTIAL:-1}
+GITTY_PLUNGER=${GITTY_PLUNGER:-1}
 
 # ---------- Cleanup handler ----------
 cleanup() {
@@ -1198,6 +1201,30 @@ while true; do
 
     echo "🟡 - Fetching remote..."
     git fetch origin "$branch" 2>/dev/null || git fetch origin 2>/dev/null || true
+
+    # Retroactive holdback for oversized blobs already buried in the local-only
+    # linear range. The original tip remains reachable through a plunger trap.
+    if [[ "$GITTY_PLUNGER" == "1" ]] \
+      && git rev-parse --verify "origin/$branch" >/dev/null 2>&1 \
+      && git merge-base --is-ancestor "origin/$branch" HEAD 2>/dev/null; then
+      typeset _plunger="$_GITTY_ROOT/bin/gittyplunger.py"
+      [[ -x "$_plunger" ]] || {
+        echo "🔴 - gittyplunger is missing or not executable: $_plunger" >&2
+        cd "$original_dir"
+        exit 1
+      }
+      echo "🟡 - Checking outgoing history for clogs..."
+      unsetopt errexit
+      _plunger_output=$(python3 "$_plunger" plunge "$root_dir" \
+        --upstream "origin/$branch" --yes 2>&1)
+      _plunger_status=$?
+      if (( _plunger_status != 0 )); then
+        print -r -- "$_plunger_output" >&2
+        cd "$original_dir"
+        exit "$_plunger_status"
+      fi
+      print -r -- "$_plunger_output"
+    fi
 
     integrate_parked=false
     if git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then

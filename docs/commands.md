@@ -62,6 +62,21 @@ gittyhealth [root_dir]
 
 No commit or push.
 
+## gittyplunger
+
+Repairs oversized blobs already buried in the local-only outgoing history.
+
+```bash
+gittyplunger scan [root_dir]
+gittyplunger plunge [root_dir] --yes
+```
+
+`scan` is read-only. `plunge` supports a linear `upstream..HEAD` range: it
+creates a trap ref for the original tip, rebuilds only that unpushed range with
+clog paths held at their upstream state, leaves current clog bytes in the
+worktree, and performs no push. Plain `gitty` invokes it automatically before a
+normal push when `GITTY_PLUNGER=1` (default).
+
 ## gittysnap
 
 Snapshot-first sync. See [gittysnap.md](gittysnap.md).
