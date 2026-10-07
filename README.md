@@ -1,6 +1,6 @@
 <p align="center">
   <img
-    src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787107583"
+    src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1791347981"
     alt="gitty icon"
     width="80"
     height="80"
@@ -35,7 +35,7 @@
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1791347981"
 width="40"
 height="40"
 alt="git"
@@ -56,7 +56,7 @@ alt="git"
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1791347981"
 width="40"
 height="40"
 alt="rebase"
@@ -77,7 +77,7 @@ alt="rebase"
 <tr>
 <td align="left">
 <img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787107583"
+src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1791347981"
 width="40"
 height="40"
 alt="gitty"
@@ -159,7 +159,6 @@ flowchart LR
 <table>
 <thead>
 <tr>
-<th align="left"></th>
 <th align="left">Bin</th>
 <th align="left">Job</th>
 <th align="left">When</th>
@@ -167,92 +166,36 @@ flowchart LR
 </thead>
 <tbody>
 <tr>
-<td align="left">
-<img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1787107583"
-width="40"
-height="40"
-alt="gitty"
-/>
-</td>
 <td align="left"><code>gitty</code></td>
 <td align="left">drip + holdback -> commit -> push</td>
 <td align="left">default backup</td>
 </tr>
 <tr>
-<td align="left">
-<img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git-lfs.webp?v=1787107583"
-width="40"
-height="40"
-alt="lfs"
-/>
-</td>
 <td align="left"><code>gittylfs</code></td>
 <td align="left">same + LFS track</td>
 <td align="left">big binaries</td>
 </tr>
 <tr>
-<td align="left">
-<img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583"
-width="40"
-height="40"
-alt="git"
-/>
-</td>
 <td align="left"><code>gittyembedded</code></td>
 <td align="left">submodules then parent</td>
 <td align="left">dirty nested repos</td>
 </tr>
 <tr>
-<td align="left">
-<img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/infomaniak-kcheck.webp?v=1787107583"
-width="40"
-height="40"
-alt="health"
-/>
-</td>
 <td align="left"><code>gittyhealth</code></td>
 <td align="left">report only</td>
 <td align="left">inspect / mid-op</td>
 </tr>
 <tr>
-<td align="left">
-<img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/borg-backup.webp?v=1787107583"
-width="40"
-height="40"
-alt="snap"
-/>
-</td>
 <td align="left"><code>gittysnap</code></td>
 <td align="left">snap -> merge -> abort clean</td>
 <td align="left">solo multi-machine</td>
 </tr>
 <tr>
-<td align="left">
-<img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1787107583"
-width="40"
-height="40"
-alt="plunger"
-/>
-</td>
 <td align="left"><code>gittyplunger</code></td>
 <td align="left">trap -> rebuild unpushed range -> hold clog</td>
 <td align="left">buried oversized blobs</td>
 </tr>
 <tr>
-<td align="left">
-<img
-src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/json.webp?v=1787107583"
-width="40"
-height="40"
-alt="union"
-/>
-</td>
 <td align="left"><code>gittyunion</code></td>
 <td align="left">NDJSON union driver</td>
 <td align="left">append ledgers</td>
@@ -444,12 +387,12 @@ npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 ## Contact
 
 <a href="https://vd7.io"><img
-src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1787107583" height="40"
+src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910810/readme-badges/readme-badge-vd7.png?v=1791347981" height="40"
 alt="vd7.io"
 /></a>
 &nbsp;
 <a href="https://x.com/vdutts7"><img
-src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1787107583" height="40"
+src="https://res.cloudinary.com/ddyc1es5v/image/upload/v1773910817/readme-badges/readme-badge-x.png?v=1791347981" height="40"
 alt="/vdutts7"
 /></a>
 
