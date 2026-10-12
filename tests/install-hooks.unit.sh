@@ -17,5 +17,12 @@ out=$("$SCRIPT" --help 2>&1)
 "$SCRIPT" --repo /tmp/nonexistent-repo-$$ >/dev/null 2>&1; rc=$?
 [[ "$rc" == "1" ]] && _pass "non-repo exits 1" || _fail "non-repo rc" "got=$rc"
 
+# need a real repo for --with parsing after repo check
+FX=$(mktemp -d /tmp/gitty-ih-unit.XXXXXX)
+git init -q -b main "$FX" >/dev/null
+"$SCRIPT" --repo "$FX" --with clearmeta >/dev/null 2>&1; rc=$?
+[[ "$rc" != "0" ]] && _pass "clearmeta --with refused" || _fail "clearmeta --with refused" "rc=$rc"
+rm -rf "$FX" 2>/dev/null || true
+
 echo "install-hooks unit: $PASS passed, $FAIL failed"
 (( FAIL == 0 )) && exit 0 || exit 1

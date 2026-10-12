@@ -11,6 +11,13 @@ if [[ "${1:-}" == "install-hooks" ]]; then
   exec bash "$_bin_dir/init-hooks.sh" "$@"
 fi
 
+# apply-flags: restore/clear macOS chflags from .gitty/file-flags.json
+if [[ "${1:-}" == "apply-flags" ]]; then
+  shift
+  _bin_dir="${0:A:h}"
+  exec bash "$_bin_dir/hooks-lib/apply-file-flags.sh" "$@"
+fi
+
 
 typeset -r _GITTY_ROOT="${0:A:h:h}"
 
@@ -340,6 +347,21 @@ $msg" >"$msg_file"
   return 0
 }
 
+# Unlock / re-apply .gitty/file-flags.json around worktree mutators (uchg blocks checkout).
+gitty_file_flags_unlock() {
+  local script="${_GITTY_ROOT}/bin/hooks-lib/apply-file-flags.sh"
+  local root="${root_dir:-$PWD}"
+  [[ -x "$script" && -f "$root/.gitty/file-flags.json" ]] || return 0
+  bash "$script" --repo "$root" --unlock --quiet
+}
+gitty_file_flags_apply() {
+  local script="${_GITTY_ROOT}/bin/hooks-lib/apply-file-flags.sh"
+  local root="${root_dir:-$PWD}"
+  [[ -x "$script" && -f "$root/.gitty/file-flags.json" ]] || return 0
+  bash "$script" --repo "$root" --apply --quiet \
+    || echo "🟡 - file-flags apply failed (worktree updated; re-run: gitty apply-flags)" >&2
+}
+
 # additive_git_integrate: doctrinal sync of origin/$branch into HEAD.
 # Returns 0 = merged (or already present), 1 = parked conflict, 2 = merge error.
 gitty_additive_integrate() {
@@ -351,12 +373,15 @@ gitty_additive_integrate() {
   if git merge-base --is-ancestor "$target_sha" HEAD 2>/dev/null; then
     return 0
   fi
+  # uchg inventory would block merge; clear then re-apply on success
+  gitty_file_flags_unlock || true
   # Prefer ff-only: no merge commit, preserves dirty index (disjoint files),
   # and matches the stale-base hook's own prescribed fix.
   # Keep filters active so decrypted worktree files compare correctly to the index.
   if git merge --ff-only --no-edit "$target_sha" >/dev/null 2>&1; then
     head_after=$(git rev-parse HEAD 2>/dev/null)
     echo "🟢 - Additive integrate (ff): $target_ref ($target_sha) [$head_before -> $head_after]"
+    gitty_file_flags_apply
     return 0
   fi
   gitty_safe_snapshot "pre-integrate"
@@ -364,6 +389,7 @@ gitty_additive_integrate() {
   if merge_output=$(git merge --no-ff --no-edit "$target_sha" 2>&1); then
     head_after=$(git rev-parse HEAD 2>/dev/null)
     echo "🟢 - Additive integrate: merged $target_ref ($target_sha) [$head_before -> $head_after]"
+    gitty_file_flags_apply
     return 0
   fi
   if [[ "$merge_output" == *"stash failed"* ]] \
@@ -371,6 +397,7 @@ gitty_additive_integrate() {
     gitty_merge_without_internal_stash "$target_sha" "$target_ref" "$msg"
     local fallback_rc=$?
     if (( fallback_rc == 0 )); then
+      gitty_file_flags_apply
       return 0
     elif (( fallback_rc == 1 )); then
       gitty_park_conflict "$target_sha"
@@ -401,6 +428,7 @@ $audit_body" 2>&1); then
       head_after=$(git rev-parse HEAD 2>/dev/null)
       echo "🟢 - Additive integrate: merged via resolvers [$head_before -> $head_after]"
       rm -f /tmp/gitty-resolver-audit-$$.log
+      gitty_file_flags_apply
       return 0
     fi
   elif [[ "${GITTY_PARTIAL:-1}" == "1" ]]; then
@@ -425,6 +453,7 @@ $audit_body" 2>&1); then
         echo "🟢 - Additive integrate (partial): merged resolved subset [$head_before -> $head_after]"
         echo "🟡 - ${#still_unmerged[@]} path(s) held back - resolve manually on next commit"
         rm -f /tmp/gitty-resolver-audit-$$.log
+        gitty_file_flags_apply
         return 0
       fi
     fi
@@ -739,12 +768,6 @@ gitty_report_hooks() {
       echo "🔴 - check-python-venv - venv paths staged"
     elif [[ "$hook_rc" -eq 0 ]]; then
       echo "🟢 - check-python-venv - passed"
-    fi
-
-    if echo "$output" | grep -q 'metadata stripped'; then
-      echo "🟢 - clearmeta - metadata stripped"
-    elif [[ "$hook_rc" -eq 0 ]]; then
-      echo "🟢 - clearmeta - passed"
     fi
 
     if echo "$output" | grep -q '\[readme-cache-bust\] bumped'; then

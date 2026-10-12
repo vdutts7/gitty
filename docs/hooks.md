@@ -25,7 +25,6 @@ When hooks run, `gitty` prints a pass(🟢)/fail(🔴) summary:
 ── hooks: pre-commit ──
 🟢 - enforce-git-identity- passed
 🟢 - check-em-dashes- fixed (em dash -> hyphen)
-🟢 - clearmeta- metadata stripped
 ── hooks: pre-push ──
 🟢 - health-check- all checks passed
 ```
@@ -57,24 +56,35 @@ gitty install-hooks --force               # overwrite existing runners
 `install-hooks` is idempotent (a second run leaves the `.hooks/` tree
 unchanged), never clobbers an existing runner unless `--force` is passed, and
 sets `core.hooksPath` to `.hooks`. It writes the canonical `pre-commit` /
-`pre-push` runners plus the empty lane directories (`pre-commit.d/`,
-`pre-push.d/`, `local.d/cosmetic/`, `local.d/gates/`, `local.d/pre-push/`).
+`pre-push` / `post-checkout` / `post-merge` runners, always installs
+`file-flags` (pre-commit sync + post-checkout/post-merge apply), and creates
+the empty lane directories.
 
-### `--with`: opt-in universal scripts
+### Always-on with install-hooks
+
+| name         | lane | effect |
+|--------------|------|--------|
+| `file-flags` | pre-commit.d + post-checkout.d + post-merge.d | 1:1 sync: worktree `uchg` <-> `.gitty/file-flags.json` |
+
+`chflags uchg` / `nouchg` on a tracked path; next commit updates the inventory.
+Checkout/pull reconciles the worktree to that list. See [`file-flags.md`](file-flags.md).
+
+### `--with`: opt-in mutators
 
 Copy consumer-safe scripts from `bin/hooks-lib/` into the lanes:
 
 ```sh
-gitty install-hooks --with em-dashes,clearmeta
+gitty install-hooks --with em-dashes,health-check
 ```
 
 | name              | lane          | effect                                    |
 |-------------------|---------------|-------------------------------------------|
 | `em-dashes`       | pre-commit.d  | normalize em-dashes to hyphens            |
 | `python-venv`     | pre-commit.d  | block committing `venv/` / `node_modules/`|
-| `clearmeta`       | pre-commit.d  | strip metadata from committed files       |
 | `drop-eof-newline`| pre-commit.d  | drop whitespace-only diffs                |
 | `health-check`    | pre-push.d    | large-file + embedded-repo scan           |
+
+`clearmeta` removed: conflicts with `uchg`/file-flags (`xattr`/`mv` fail under immutable), and the old `--with` copy was not a staged-file hook (blocked commits with `path required`).
 
 Maintainer-scoped scripts (identity enforcement, README badges, remote pinning)
 stay in `.hooks/scripts/` in the source repo and are excluded from the npm

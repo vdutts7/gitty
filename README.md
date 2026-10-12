@@ -33,7 +33,7 @@
 </thead>
 <tbody>
 <tr>
-<td align="left">
+<td width="56" align="left">
 <img
 src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1791347981"
 width="40"
@@ -54,7 +54,7 @@ alt="git"
 <td align="left">❌<br/><br/>stalls the backup</td>
 </tr>
 <tr>
-<td align="left">
+<td width="56" align="left">
 <img
 src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/git.webp?v=1791347981"
 width="40"
@@ -75,7 +75,7 @@ alt="rebase"
 <td align="left">❌<br/><br/>sync theater</td>
 </tr>
 <tr>
-<td align="left">
+<td width="56" align="left">
 <img
 src="https://raw.githubusercontent.com/vdutts7/squircle/main/webp/gitty.webp?v=1791347981"
 width="40"
@@ -360,6 +360,7 @@ as parked conflicts. Any in-progress merge is left in place for manual recovery.
 | per-host artifact conflicts every sync | `.gitty/additive-resolvers.yaml` `per_host` | stable | ours on that host; `--no-ff` keeps both parents |
 | `.ndjson` append conflict | `semantic_union` or `gittyunion install` | stable | union + dedupe + stable-sort |
 | fresh clone drops union driver | re-run `gittyunion install` | stable | attrs alone insufficient |
+| want `uchg` restored across clones | `gitty install-hooks`; `chflags uchg` paths; commit (pre-commit syncs inventory) | stable | 1:1 worktree <-> `.gitty/file-flags.json`; apply on checkout/pull |
 | nothing can land | park `bak/pending-merge-*` | stable | first-class ref; nothing lost; non-fatal |
 | foreign-owned `.git` (old `sudo git`) | `sudo chown -R "$(whoami)" .git` | stable | fail-fast; `GITTY_SKIP_PERM_CHECK=1` opt out |
 
@@ -381,6 +382,7 @@ local remotes only.
 | [`docs/partial-commit`](docs/partial-commit%2Emd) | holdback + drip |
 | [`docs/environment`](docs/environment%2Emd) | env |
 | [`docs/hooks`](docs/hooks%2Emd) | repo hooks |
+| [`docs/file-flags`](docs/file-flags%2Emd) | `uchg` inventory restore |
 
 npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 

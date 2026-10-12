@@ -23,9 +23,14 @@ _has() { jq -e --arg path "$1" '.[0].files | any(.path == $path)' "$TMP/dry-run.
 _has 'bin/init-hooks.sh'                && _pass "ships bin/init-hooks.sh"          || _fail "bin/init-hooks.sh" "missing"
 _has 'bin/gitty-dispatch.sh'            && _pass "ships bin/gitty-dispatch.sh"      || _fail "bin/gitty-dispatch.sh" "missing"
 _has 'bin/gittyplunger.py'              && _pass "ships bin/gittyplunger.py"        || _fail "bin/gittyplunger.py" "missing"
-_has 'bin/hooks-lib/clearmeta.sh'       && _pass "ships bin/hooks-lib/clearmeta.sh" || _fail "clearmeta.sh" "missing"
 _has 'bin/hooks-lib/check-em-dashes.sh' && _pass "ships check-em-dashes.sh"         || _fail "check-em-dashes.sh" "missing"
+_has 'bin/hooks-lib/apply-file-flags.sh' && _pass "ships apply-file-flags.sh"       || _fail "apply-file-flags.sh" "missing"
 _has 'bin/hooks-lib/README.md'          && _pass "ships hooks-lib README"           || _fail "hooks-lib README" "missing"
+if _has 'bin/hooks-lib/clearmeta.sh'; then
+  _fail "must NOT ship clearmeta.sh" "removed; conflicts with file-flags"
+else
+  _pass "excludes clearmeta.sh"
+fi
 
 for banned in \
   '\.hooks/scripts/' \

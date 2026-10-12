@@ -77,6 +77,15 @@ clog paths held at their upstream state, leaves current clog bytes in the
 worktree, and performs no push. Plain `gitty` invokes it automatically before a
 normal push when `GITTY_PLUNGER=1` (default).
 
+## gitty apply-flags
+
+Restore or clear macOS `chflags` from `.gitty/file-flags.json`. See [file-flags.md](file-flags.md).
+
+```bash
+gitty apply-flags [--repo <path>] [--sync|--apply|--unlock] [--stage] [--quiet]
+gitty install-hooks   # file-flags 1:1 sync always included
+```
+
 ## gittysnap
 
 Snapshot-first sync. See [gittysnap.md](gittysnap.md).

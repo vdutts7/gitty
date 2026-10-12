@@ -6,7 +6,6 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 ENFORCE_CONFIG="$ROOT/.hooks/scripts/enforce-git-config.sh"
 CHECK_EM_DASHES="$ROOT/.hooks/scripts/check-em-dashes.sh"
 CHECK_PYTHON_VENV="$ROOT/.hooks/scripts/check-python-venv.sh"
-CLEARMETA="$ROOT/.hooks/scripts/clearmeta.sh"
 DROP_EOF_NEWLINE="$ROOT/.hooks/scripts/drop-eof-newline-only.sh"
 CHECK_README_IMAGES="$ROOT/.hooks/scripts/check-readme-images.sh"
 staged_names=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
@@ -21,15 +20,7 @@ fi
 if [[ -x "$ENFORCE_CONFIG" ]]; then "$ENFORCE_CONFIG" "$ROOT" --quiet; fi
 if [[ -x "$CHECK_EM_DASHES" ]]; then "$CHECK_EM_DASHES"; fi
 if [[ -x "$CHECK_PYTHON_VENV" ]]; then "$CHECK_PYTHON_VENV"; fi
-if [[ -x "$CLEARMETA" ]]; then
-  staged=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
-  if [[ -n "$staged" ]]; then
-    while IFS= read -r f; do
-      [[ -f "$f" && "$f" != ".git/"* ]] && "$CLEARMETA" -q "$f" 2>/dev/null && git add "$f" 2>/dev/null || true
-    done <<< "$staged"
-    echo "[pre-commit] metadata stripped"
-  fi
-fi
+# clearmeta removed: conflicts with uchg/file-flags; xattr/mv fail under uchg
 if [[ -x "$DROP_EOF_NEWLINE" ]]; then "$DROP_EOF_NEWLINE" || true; fi
 if [[ -x "$CHECK_README_IMAGES" ]]; then "$CHECK_README_IMAGES"; fi
 exit 0
