@@ -11,7 +11,7 @@
 | [partial-commit.md](partial-commit.md) | holdback, drip-through, and buried-clog repair |
 | [environment.md](environment.md) | env vars |
 | [hooks.md](hooks.md) | `.hooks/` vs npm-only |
-| [file-flags.md](file-flags.md) | `uchg` inventory restore |
+| [file-flags.md](file-flags.md) | `uchg` 1:1 sync via `install-hooks` |
 
 ## Quick start
 

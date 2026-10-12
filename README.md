@@ -240,6 +240,7 @@ semantic_union:
 | C | `gittyunion install` | NDJSON union merge driver |
 | D | `gitty-dispatch` | config-driven Git operation routing |
 | E | `gittyplunger scan` | inspect oversized blobs buried in unpushed history |
+| F | `gitty install-hooks` | always-on `uchg` 1:1 sync + optional `--with` mutators |
 
 ### Path A · `gitty`
 
@@ -329,6 +330,20 @@ either `intercept_ops` or `passthrough_ops`. Configuration and configured
 executables are trusted inputs; process ancestry prevents accidental or agentic
 route-around, not attacks by another process already running as the same user.
 
+### Path F · `gitty install-hooks` / file-flags
+
+```bash
+# once per clone — installs runners + always-on uchg 1:1 sync
+gitty install-hooks
+chflags uchg path/you/want/locked   # next commit writes .gitty/file-flags.json
+gitty apply-flags                   # reconcile now (also post-checkout / post-merge)
+```
+
+Git does not store `chflags`. Pre-commit syncs tracked `uchg` into
+`.gitty/file-flags.json`; checkout/pull applies that list back. Optional
+`--with em-dashes,health-check,…` adds mutators. Full detail:
+[`docs/file-flags`](docs/file-flags%2Emd) (GitHub; not in the npm tarball).
+
 ## Output
 
 | signal | meaning |
@@ -382,7 +397,7 @@ local remotes only.
 | [`docs/partial-commit`](docs/partial-commit%2Emd) | holdback + drip |
 | [`docs/environment`](docs/environment%2Emd) | env |
 | [`docs/hooks`](docs/hooks%2Emd) | repo hooks |
-| [`docs/file-flags`](docs/file-flags%2Emd) | `uchg` inventory restore |
+| [`docs/file-flags`](docs/file-flags%2Emd) | `uchg` 1:1 sync (`install-hooks`) |
 
 npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 
