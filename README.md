@@ -240,7 +240,7 @@ semantic_union:
 | C | `gittyunion install` | NDJSON union merge driver |
 | D | `gitty-dispatch` | config-driven Git operation routing |
 | E | `gittyplunger scan` | inspect oversized blobs buried in unpushed history |
-| F | `gitty install-hooks` | always-on `uchg` 1:1 sync + optional `--with` mutators |
+| F | `gitty install-hooks` | always-on file-attrs (`uchg`+owner) 1:1 sync + optional `--with` mutators |
 
 ### Path A · `gitty`
 
@@ -330,19 +330,19 @@ either `intercept_ops` or `passthrough_ops`. Configuration and configured
 executables are trusted inputs; process ancestry prevents accidental or agentic
 route-around, not attacks by another process already running as the same user.
 
-### Path F · `gitty install-hooks` / file-flags
+### Path F · `gitty install-hooks` / file-attrs
 
 ```bash
 # once per clone — installs runners + always-on uchg 1:1 sync
 gitty install-hooks
-chflags uchg path/you/want/locked   # next commit writes .gitty/file-flags.json
+chflags uchg path/you/want/locked   # next commit writes .gitty/file-attrs.json
 gitty apply-flags                   # reconcile now (also post-checkout / post-merge)
 ```
 
 Git does not store `chflags`. Pre-commit syncs tracked `uchg` into
-`.gitty/file-flags.json`; checkout/pull applies that list back. Optional
+`.gitty/file-attrs.json` (`flags` + optional `owner`/`group`); checkout/pull applies that list back. Optional
 `--with em-dashes,health-check,…` adds mutators. Full detail:
-[`docs/file-flags`](docs/file-flags%2Emd) (GitHub; not in the npm tarball).
+[`docs/file-attrs`](docs/file-attrs%2Emd) (GitHub; not in the npm tarball). Legacy name: [`docs/file-flags`](docs/file-flags%2Emd).
 
 ## Output
 
@@ -375,7 +375,7 @@ as parked conflicts. Any in-progress merge is left in place for manual recovery.
 | per-host artifact conflicts every sync | `.gitty/additive-resolvers.yaml` `per_host` | stable | ours on that host; `--no-ff` keeps both parents |
 | `.ndjson` append conflict | `semantic_union` or `gittyunion install` | stable | union + dedupe + stable-sort |
 | fresh clone drops union driver | re-run `gittyunion install` | stable | attrs alone insufficient |
-| want `uchg` restored across clones | `gitty install-hooks`; `chflags uchg` paths; commit (pre-commit syncs inventory) | stable | 1:1 worktree <-> `.gitty/file-flags.json`; apply on checkout/pull |
+| want `uchg` restored across clones | `gitty install-hooks`; `chflags uchg` paths; commit (pre-commit syncs inventory) | stable | 1:1 worktree <-> `.gitty/file-attrs.json`; apply on checkout/pull |
 | nothing can land | park `bak/pending-merge-*` | stable | first-class ref; nothing lost; non-fatal |
 | foreign-owned `.git` (old `sudo git`) | `sudo chown -R "$(whoami)" .git` | stable | fail-fast; `GITTY_SKIP_PERM_CHECK=1` opt out |
 
@@ -397,7 +397,8 @@ local remotes only.
 | [`docs/partial-commit`](docs/partial-commit%2Emd) | holdback + drip |
 | [`docs/environment`](docs/environment%2Emd) | env |
 | [`docs/hooks`](docs/hooks%2Emd) | repo hooks |
-| [`docs/file-flags`](docs/file-flags%2Emd) | `uchg` 1:1 sync (`install-hooks`) |
+| [`docs/file-attrs`](docs/file-attrs%2Emd) | `uchg`+owner 1:1 sync (`install-hooks`) |
+| [`docs/file-flags`](docs/file-flags%2Emd) | renamed → file-attrs |
 
 npm tarball = `bin/` + `README` only. `docs/` is GitHub.
 
