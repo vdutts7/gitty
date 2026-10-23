@@ -57,17 +57,17 @@ gitty install-hooks --force               # overwrite existing runners
 unchanged), never clobbers an existing runner unless `--force` is passed, and
 sets `core.hooksPath` to `.hooks`. It writes the canonical `pre-commit` /
 `pre-push` / `post-checkout` / `post-merge` runners, always installs
-`file-flags` (pre-commit sync + post-checkout/post-merge apply), and creates
+`file-attrs` (pre-commit sync + post-checkout/post-merge apply), and creates
 the empty lane directories.
 
 ### Always-on with install-hooks
 
 | name         | lane | effect |
 |--------------|------|--------|
-| `file-flags` | pre-commit.d + post-checkout.d + post-merge.d | 1:1 sync: worktree `uchg` <-> `.gitty/file-flags.json` |
+| `file-attrs` | pre-commit.d + post-checkout.d + post-merge.d | 1:1 sync: worktree `uchg`+owner <-> `.gitty/file-attrs.json` |
 
 `chflags uchg` / `nouchg` on a tracked path; next commit updates the inventory.
-Checkout/pull reconciles the worktree to that list. See [`file-flags.md`](file-flags.md).
+Checkout/pull reconciles the worktree to that list. See [`file-attrs.md`](file-attrs.md).
 
 ### `--with`: opt-in mutators
 

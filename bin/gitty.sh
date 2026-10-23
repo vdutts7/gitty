@@ -8,14 +8,25 @@ setopt errexit pipefail
 if [[ "${1:-}" == "install-hooks" ]]; then
   shift
   _bin_dir="${0:A:h}"
-  exec bash "$_bin_dir/init-hooks.sh" "$@"
+  _init="$_bin_dir/init-hooks.sh"
+  if [[ ! -f "$_init" ]]; then
+    _init="${GITTY:-$HOME/Documents/a/gitty}/bin/init-hooks.sh"
+  fi
+  exec bash "$_init" "$@"
 fi
 
-# apply-flags: restore/clear macOS chflags from .gitty/file-flags.json
-if [[ "${1:-}" == "apply-flags" ]]; then
+# apply-flags|apply-attrs: restore Darwin attrs (chflags+owner) from .gitty/file-attrs.json
+if [[ "${1:-}" == "apply-flags" || "${1:-}" == "apply-attrs" ]]; then
   shift
   _bin_dir="${0:A:h}"
-  exec bash "$_bin_dir/hooks-lib/apply-file-flags.sh" "$@"
+  _af="$_bin_dir/hooks-lib/apply-file-attrs.sh"
+  if [[ ! -f "$_af" ]]; then
+    _af="${CURTOOLS:-$HOME/.cursor/tools}/git/githooks/scripts/apply-file-attrs.sh"
+  fi
+  if [[ ! -f "$_af" ]]; then
+    _af="${GITTY:-$HOME/Documents/a/gitty}/bin/hooks-lib/apply-file-attrs.sh"
+  fi
+  exec bash "$_af" "$@"
 fi
 
 
@@ -347,19 +358,19 @@ $msg" >"$msg_file"
   return 0
 }
 
-# Unlock / re-apply .gitty/file-flags.json around worktree mutators (uchg blocks checkout).
+# Unlock / re-apply .gitty/file-attrs.json around worktree mutators (uchg blocks checkout).
 gitty_file_flags_unlock() {
-  local script="${_GITTY_ROOT}/bin/hooks-lib/apply-file-flags.sh"
+  local script="${_GITTY_ROOT}/bin/hooks-lib/apply-file-attrs.sh"
   local root="${root_dir:-$PWD}"
-  [[ -x "$script" && -f "$root/.gitty/file-flags.json" ]] || return 0
+  [[ -x "$script" && -f "$root/.gitty/file-attrs.json" ]] || return 0
   bash "$script" --repo "$root" --unlock --quiet
 }
 gitty_file_flags_apply() {
-  local script="${_GITTY_ROOT}/bin/hooks-lib/apply-file-flags.sh"
+  local script="${_GITTY_ROOT}/bin/hooks-lib/apply-file-attrs.sh"
   local root="${root_dir:-$PWD}"
-  [[ -x "$script" && -f "$root/.gitty/file-flags.json" ]] || return 0
+  [[ -x "$script" && -f "$root/.gitty/file-attrs.json" ]] || return 0
   bash "$script" --repo "$root" --apply --quiet \
-    || echo "🟡 - file-flags apply failed (worktree updated; re-run: gitty apply-flags)" >&2
+    || echo "🟡 - file-attrs apply failed (worktree updated; re-run: gitty apply-flags|apply-attrs)" >&2
 }
 
 # additive_git_integrate: doctrinal sync of origin/$branch into HEAD.
