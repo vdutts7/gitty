@@ -9,9 +9,10 @@ if [[ "${1:-}" == "install-hooks" ]]; then
   shift
   _bin_dir="${0:A:h}"
   _init="$_bin_dir/init-hooks.sh"
-  if [[ ! -f "$_init" ]]; then
-    _init="${GITTY:-$HOME/Documents/a/gitty}/bin/init-hooks.sh"
+  if [[ ! -f "$_init" && -n "${GITTY:-}" ]]; then
+    _init="$GITTY/bin/init-hooks.sh"
   fi
+  [[ -f "$_init" ]] || { print -u2 "init-hooks.sh missing (set GITTY or run from package bin/)"; exit 1; }
   exec bash "$_init" "$@"
 fi
 
@@ -20,12 +21,10 @@ if [[ "${1:-}" == "apply-flags" || "${1:-}" == "apply-attrs" ]]; then
   shift
   _bin_dir="${0:A:h}"
   _af="$_bin_dir/hooks-lib/apply-file-attrs.sh"
-  if [[ ! -f "$_af" ]]; then
-    _af="${CURTOOLS:-$HOME/.cursor/tools}/git/githooks/scripts/apply-file-attrs.sh"
+  if [[ ! -f "$_af" && -n "${GITTY:-}" ]]; then
+    _af="$GITTY/bin/hooks-lib/apply-file-attrs.sh"
   fi
-  if [[ ! -f "$_af" ]]; then
-    _af="${GITTY:-$HOME/Documents/a/gitty}/bin/hooks-lib/apply-file-attrs.sh"
-  fi
+  [[ -f "$_af" ]] || { print -u2 "apply-file-attrs.sh missing (set GITTY or run from package bin/)"; exit 1; }
   exec bash "$_af" "$@"
 fi
 

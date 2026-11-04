@@ -29,7 +29,7 @@ done
 
 [[ -d "$REPO/.git" || -f "$REPO/.git" ]] || { echo "not a git repo: $REPO" >&2; exit 1; }
 
-# Catalog SSOT: $CURREGISTRY/git/githooks. .gitty/hooks.json {with:[ids]} when --with omitted.
+# Optional: .gitty/hooks.json {with:[ids]} when --with omitted.
 if [[ -z "$WITH" && -f "$REPO/.gitty/hooks.json" ]]; then
   WITH="$(python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); w=d.get("with") or []; print(",".join(w))' "$REPO/.gitty/hooks.json")"
 fi
@@ -135,13 +135,8 @@ else
   _write_post_merge; echo "🟢 wrote .hooks/post-merge"
 fi
 
-ACT="${CURTOOLS:-$HOME/.cursor/tools}/git/activate-hooks.sh"
-if [[ -x "$ACT" ]]; then
-  "$ACT" "$REPO"
-else
-  git -C "$REPO" config core.hooksPath .hooks
-  echo "🟢 git config core.hooksPath = .hooks (activate-hooks.sh missing)"
-fi
+git -C "$REPO" config core.hooksPath .hooks
+echo "🟢 git config core.hooksPath = .hooks"
 
 [[ -d "$lib_dir" ]] || { echo "🔴 bin/hooks-lib/ not found" >&2; exit 1; }
 _ff_src="$lib_dir/apply-file-attrs.sh"
@@ -182,32 +177,25 @@ _install_wrapper "$_ff_mg" apply
 # Clone chicken-egg: reconcile once (no-op without inventory).
 bash "$_ff_src" --repo "$REPO" --apply --quiet || true
 
-INSTALL="${CURTOOLS:-$HOME/.cursor/tools}/git/githooks/install-plugin.sh"
 if [[ -n "$WITH" ]]; then
-  if [[ -x "$INSTALL" ]]; then
-    extra=(--repo "$REPO" --with "$WITH")
-    [[ "$FORCE" == "1" ]] && extra+=(--force --force-runners)
-    "$INSTALL" "${extra[@]}"
-  else
-    echo "🔴 install-plugin.sh missing; npm-only: consumer-safe hooks-lib only" >&2
-    IFS=',' read -ra items <<< "$WITH"
-    n=20
-    for raw in "${items[@]}"; do
-      name="${raw// /}"
-      case "$name" in
-        file-attrs|file-attrs-sync|file-attrs-apply|apply-file-attrs|file-flags|file-flags-sync|file-flags-apply|apply-file-flags) continue ;;
-        em-dashes|check-em-dashes) src="$lib_dir/check-em-dashes.sh"; dst="$REPO/.hooks/pre-commit.d/$(printf '%02d' $n)-check-em-dashes.sh" ;;
-        python-venv|check-python-venv) src="$lib_dir/check-python-venv.sh"; dst="$REPO/.hooks/pre-commit.d/$(printf '%02d' $n)-check-python-venv.sh" ;;
-        clearmeta|check-collaborator) echo "🔴 $name retired" >&2; exit 1 ;;
-        drop-eof-newline|drop-eof-newline-only) src="$lib_dir/drop-eof-newline-only.sh"; dst="$REPO/.hooks/pre-commit.d/$(printf '%02d' $n)-drop-eof-newline-only.sh" ;;
-        health-check) src="$lib_dir/health-check.sh"; dst="$REPO/.hooks/pre-push.d/$(printf '%02d' $n)-health-check.sh" ;;
-        *) echo "🔴 unknown --with name without CURTOOLS catalog: $name" >&2; exit 1 ;;
-      esac
-      cp "$src" "$dst" && chmod +x "$dst"
-      echo "🟢 installed $name -> ${dst#$REPO/}"
-      n=$((n + 10))
-    done
-  fi
+  echo "🟢 installing --with from bin/hooks-lib (package-local)" >&2
+  IFS=',' read -ra items <<< "$WITH"
+  n=20
+  for raw in "${items[@]}"; do
+    name="${raw// /}"
+    case "$name" in
+      file-attrs|file-attrs-sync|file-attrs-apply|apply-file-attrs|file-flags|file-flags-sync|file-flags-apply|apply-file-flags) continue ;;
+      em-dashes|check-em-dashes) src="$lib_dir/check-em-dashes.sh"; dst="$REPO/.hooks/pre-commit.d/$(printf '%02d' $n)-check-em-dashes.sh" ;;
+      python-venv|check-python-venv) src="$lib_dir/check-python-venv.sh"; dst="$REPO/.hooks/pre-commit.d/$(printf '%02d' $n)-check-python-venv.sh" ;;
+      clearmeta|check-collaborator) echo "🔴 $name retired" >&2; exit 1 ;;
+      drop-eof-newline|drop-eof-newline-only) src="$lib_dir/drop-eof-newline-only.sh"; dst="$REPO/.hooks/pre-commit.d/$(printf '%02d' $n)-drop-eof-newline-only.sh" ;;
+      health-check) src="$lib_dir/health-check.sh"; dst="$REPO/.hooks/pre-push.d/$(printf '%02d' $n)-health-check.sh" ;;
+      *) echo "🔴 unknown --with name (not in bin/hooks-lib): $name" >&2; exit 1 ;;
+    esac
+    cp "$src" "$dst" && chmod +x "$dst"
+    echo "🟢 installed $name -> ${dst#$REPO/}"
+    n=$((n + 10))
+  done
 fi
 
 echo "🟢 install-hooks complete"
