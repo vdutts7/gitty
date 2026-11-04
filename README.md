@@ -349,7 +349,7 @@ Git does not store `chflags`. Pre-commit syncs tracked `uchg` into
 | signal | meaning |
 |---|---|
 | partial integrate | resolved subset committed; held paths stay local |
-| holdback | oversized / submodule / push-reject / hook-reject left unstaged |
+| holdback | oversized / submodule / push-reject / hook-reject / pre-push script-crash left unstaged |
 | `[CODE] reason` | catalog match for pre-commit reject (else offender stderr line) |
 | drip retry | hook emitted `GITTY_HOLDBACK` records; one aggregate unstage; one bounded commit retry |
 | plunge | oversized blob was buried in local-only history; original tip trapped, clean range rebuilt |

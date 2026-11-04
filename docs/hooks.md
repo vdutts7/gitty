@@ -29,18 +29,17 @@ When hooks run, `gitty` prints a pass(🟢)/fail(🔴) summary:
 🟢 - health-check- all checks passed
 ```
 
-Hook block → 🔴, commit/push stops
-- partial holdback does **not** bypass hook failures
-
 ## Partial commit vs hooks
 
 | Layer | What it does |
 |-------|----------------|
-| `gitty` partial holdback | Size/submodule/push-reject paths → see [`partial-commit.md`](partial-commit.md) |
+| `gitty` partial holdback | Size/submodule/push-reject paths + pre-push *script* crashes → see [`partial-commit.md`](partial-commit.md) |
 | Repo hooks | Policy gates (`identity`, `venv`, `health-check`, etc) |
 
-They are **independent**:
-- a hook block still aborts whole commit **even when partial mode is on**
+Rules:
+- policy hook failure with no named changed path → 🔴 hard-stop (partial does not clear it)
+- pre-push *script* crash (`path: line N:`) on a path changed in `HEAD` → hold that path, restore prior live hook, push the rest
+- pre-commit drip: see [`partial-commit.md`](partial-commit.md) elimination drip
 
 ## Installing the runners: `gitty install-hooks` (added v0.6.19)
 

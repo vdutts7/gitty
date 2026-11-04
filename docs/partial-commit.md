@@ -25,6 +25,9 @@ git add -A
 | File over size limit | Pre-commit scan | `exceeds push size limit (N bytes)` |
 | Push-rejected path | After failed push | `push rejected` |
 | Pre-commit hook reject | Elimination drip (`GITTY_PARTIAL=1`) | catalog `[CODE] reason` or offender stderr |
+| Pre-push hook *script* crash | `path: line N:` (or `path:N:`) in push stderr, and path changed in `HEAD` | `pre-push hook script failure` |
+
+Pre-push script crash drip restores the prior live copy of the hook so the next push can run, keeps the broken bytes under `.git/gitty-holdback/`, recommits without that path, and pushes the rest. Policy hook failures that do not name a changed path still hard-stop.
 
 Default size limit: **100 MiB** (GitHub hard limit)
 - Override with `GITTY_MAX_FILE_BYTES`

@@ -609,6 +609,66 @@ gitty_parse_push_offender() {
   return 1
 }
 
+# Parse bash/zsh "path: line N:" / "path:N:" crash lines from pre-push stderr.
+# Returns repo-relative path only when the file lives inside this worktree.
+gitty_parse_hook_script_offender() {
+  local output="$1"
+  local root raw rel
+  root="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+
+  raw=$(printf '%s\n' "$output" \
+    | grep -oE '[^[:space:]"'"'"']+\.(sh|zsh|bash):[[:space:]]+line[[:space:]]+[0-9]+' \
+    | head -1 \
+    | sed -E 's/:[[:space:]]+line[[:space:]]+[0-9]+$//' ) || true
+  if [[ -z "$raw" ]]; then
+    raw=$(printf '%s\n' "$output" \
+      | grep -oE '[^[:space:]"'"'"']+\.(sh|zsh|bash):[0-9]+:' \
+      | head -1 \
+      | sed -E 's/:[0-9]+:$//' ) || true
+  fi
+  [[ -z "$raw" ]] && return 1
+
+  if [[ "$raw" == /* ]]; then
+    case "$raw" in
+      "$root"/*) rel="${raw#$root/}" ;;
+      *) return 1 ;;
+    esac
+  else
+    rel="${raw#./}"
+  fi
+  [[ -n "$rel" && -e "$root/$rel" ]] || return 1
+  print -r -- "$rel"
+  return 0
+}
+
+# Hold back a broken hook script that blocks every push: keep the broken bytes
+# under .git/gitty-holdback/, restore HEAD's copy to the live path so subsequent
+# hooks can run, leave the path unstaged so the recommit drops the bad change.
+# NOTE: never name a local `path` — zsh ties path <-> PATH and clobbers $PATH.
+gitty_holdback_hook_script() {
+  local hb_path="$1" reason="${2:-pre-push hook script failure}"
+  local root hold_dest hold_parent
+  # Prefer the session root_dir (already cd'd); show-toplevel can flake after
+  # soft-reset in some hookPath layouts.
+  root="${root_dir:-}"
+  [[ -n "$root" && -d "$root" ]] || root="$(pwd)"
+  hold_dest="$root/.git/gitty-holdback/$hb_path"
+  hold_parent="${hold_dest:h}"
+  mkdir -p "$hold_parent"
+  if [[ -f "$root/$hb_path" ]]; then
+    cp -p "$root/$hb_path" "$hold_dest" 2>/dev/null || cp "$root/$hb_path" "$hold_dest"
+  fi
+  if git cat-file -e "HEAD:$hb_path" 2>/dev/null; then
+    git checkout HEAD -- "$hb_path" 2>/dev/null || true
+    git reset HEAD -- "$hb_path" 2>/dev/null || true
+  else
+    rm -f "$root/$hb_path"
+    git reset HEAD -- "$hb_path" 2>/dev/null || true
+  fi
+  gitty_record_held "$hb_path" "$reason"
+  echo "🟡 - restored prior $hb_path for live hooks; broken copy under .git/gitty-holdback/"
+}
+
 gitty_unstage_held_paths() {
   local p
   for p in "${gitty_held_paths[@]}"; do
@@ -1323,7 +1383,26 @@ while true; do
   fi
 
   offender=""
+  offender_reason="push rejected"
   offender=$(gitty_resolve_push_offender "$push_output" 2>/dev/null || true)
+
+  # Pre-push hook *script* crash (syntax/EOF): if the crashing path changed in
+  # HEAD, drip like any other offender — hold it back, restore prior live hook,
+  # push the rest. Policy hook failures with no path stay hard-stop.
+  if [[ -z "$offender" && "${GITTY_PARTIAL:-1}" == "1" ]]; then
+    _hook_script=""
+    _hook_script=$(gitty_parse_hook_script_offender "$push_output" 2>/dev/null || true)
+    if [[ -n "$_hook_script" ]]; then
+      if git diff-tree --no-commit-id --name-only -r HEAD -- "$_hook_script" 2>/dev/null \
+           | grep -qxF "$_hook_script"; then
+        offender="$_hook_script"
+        offender_reason="pre-push hook script failure"
+      else
+        echo "🔴 - Pre-push hook script crashed ($_hook_script) but path unchanged in HEAD; not holdable" >&2
+      fi
+    fi
+  fi
+
   if [[ -z "$offender" || $push_attempt -ge $push_max ]]; then
     if echo "$push_output" | grep -qiE 'hook declined|BLOCKED|failed'; then
       echo "🔴 - Push blocked by hook" >&2
@@ -1343,7 +1422,11 @@ while true; do
     setopt errexit
     committed=false
   fi
-  gitty_holdback_path "$offender" "push rejected"
+  if [[ "$offender_reason" == "pre-push hook script failure" ]]; then
+    gitty_holdback_hook_script "$offender" "$offender_reason"
+  else
+    gitty_holdback_path "$offender" "$offender_reason"
+  fi
   gitty_holdback_offenders
 
   if git diff --cached --quiet 2>/dev/null; then
@@ -1366,12 +1449,14 @@ while true; do
   fi
   committed=true
   echo "$commit_output"
-  ((push_attempt++))
+  # zsh: ((0++)) yields status 1 under errexit — use arithmetic assignment
+  push_attempt=$((push_attempt + 1))
 done
 
-cd "$original_dir"
-
+# Report while still inside root_dir so `git show` names this repo's tip.
 gitty_report_partial
+
+cd "$original_dir"
 
 if [[ "$nothing_to_commit" == true && "$push_up_to_date" == true ]]; then
   if [[ ${#gitty_held_paths[@]} -gt 0 ]]; then
